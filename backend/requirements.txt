@@ -3,3 +3,5 @@ flask-cors==5.0.1
 yfinance==0.2.54
 pandas==2.2.3
 gunicorn==21.2.0
+fake-useragent==1.5.1
+requests-cache==1.2.0

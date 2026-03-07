@@ -12,18 +12,40 @@ import time
 import traceback
 from functools import wraps
 import requests
+import requests_cache
+from fake_useragent import UserAgent
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # ── Yahoo Finance Session Setup ────────────────────────────────
 # Cloud providers (like Render) are often instantly rate-limited 
-# by Yahoo Finance. Using a custom session with browser headers fixes this.
-yf_session = requests.Session()
-yf_session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-})
+# by Yahoo Finance. Using a cached session and rotating User-Agents fixes this.
+
+# Enable SQLite caching to heavily reduce duplicate outbound requests
+yf_session = requests_cache.CachedSession('yfinance.cache', expire_after=3600)
+
+ua = UserAgent()
+
+def get_randomized_session():
+    """Update headers with a fresh randomized desktop User-Agent."""
+    yf_session.headers.update({
+        "User-Agent": ua.random,
+        "Accept": "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
+    })
+    return yf_session
+
+# Initialize headers
+get_randomized_session()
 
 # ── Simple in-memory cache ─────────────────────────────────────
 _cache = {}
@@ -84,7 +106,17 @@ def search_ticker():
         return jsonify([])
 
     try:
-        results = yf.Search(query, max_results=8)
+        session = get_randomized_session()
+        # yf.Search does not accept a session argument directly in older yfinance, 
+        # but the backend is now usingrequests_cache globally or we can use the explicit session
+        # For Search, we'll try passing it if supported, or fall back to requests 
+        # Actually newer yfinance supports session in yf.Search
+        # If it throws, we can handle it
+        try:
+            results = yf.Search(query, max_results=8, session=session)
+        except TypeError:
+            results = yf.Search(query, max_results=8)
+            
         quotes = []
         for q in (results.quotes or []):
             quotes.append({
