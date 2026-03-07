@@ -11,9 +11,19 @@ import math
 import time
 import traceback
 from functools import wraps
+import requests
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# ── Yahoo Finance Session Setup ────────────────────────────────
+# Cloud providers (like Render) are often instantly rate-limited 
+# by Yahoo Finance. Using a custom session with browser headers fixes this.
+yf_session = requests.Session()
+yf_session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+})
 
 # ── Simple in-memory cache ─────────────────────────────────────
 _cache = {}
@@ -98,7 +108,7 @@ def stock_history(ticker):
     interval = request.args.get('interval', '1mo')
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=yf_session)
         hist = stock.history(period=period, interval=interval, auto_adjust=True)
 
         if hist.empty:
@@ -137,7 +147,7 @@ def stock_info(ticker):
         return jsonify(hit)
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=yf_session)
         info = stock.info
 
         if not info or info.get('regularMarketPrice') is None:
@@ -205,7 +215,7 @@ def stock_info(ticker):
 def stock_dividends(ticker):
     """Get historical dividend payments."""
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=yf_session)
         dividends = stock.dividends
 
         if dividends is None or dividends.empty:
@@ -245,7 +255,7 @@ def stock_dividends(ticker):
 def stock_financials(ticker):
     """Get income statement, balance sheet, and cash flow."""
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=yf_session)
 
         def df_to_dict(df):
             if df is None or df.empty:
@@ -275,7 +285,7 @@ def stock_financials(ticker):
 def stock_etf(ticker):
     """Get ETF-specific data: top holdings and sector weightings."""
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=yf_session)
 
         # Check if this is actually an ETF
         info = stock.info
