@@ -356,6 +356,29 @@ body {
     max-width: 480px;
 }
 
+/* Hide in navbar on mobile, show on desktop */
+.search-desktop {
+    display: none;
+}
+
+/* Show under navbar on mobile, hide on desktop */
+.search-mobile {
+    display: block;
+    padding: 12px 24px;
+    background: var(--bg-nav);
+    border-bottom: 1px solid var(--border-light);
+}
+
+@media (min-width: 768px) {
+    .search-desktop {
+        display: block;
+    }
+
+    .search-mobile {
+        display: none;
+    }
+}
+
 .search-input-wrapper {
     position: relative;
 }

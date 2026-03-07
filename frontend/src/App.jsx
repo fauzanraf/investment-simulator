@@ -256,7 +256,9 @@ export default function App() {
                         <span className="nav-brand-text">Investment Simulator</span>
                     </div>
 
-                    <SearchBar onSelect={(symbol) => loadTicker(symbol)} />
+                    <div className="search-desktop">
+                        <SearchBar onSelect={(symbol) => loadTicker(symbol)} />
+                    </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div
@@ -279,6 +281,10 @@ export default function App() {
                     </div>
                 </div>
             </nav>
+
+            <div className="search-mobile">
+                <SearchBar onSelect={(symbol) => loadTicker(symbol)} />
+            </div>
 
             {/* Sticky Ticker Bar */}
             {stockInfo && (
