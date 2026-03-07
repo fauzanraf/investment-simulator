@@ -353,12 +353,15 @@ body {
 .search-container {
     position: relative;
     flex: 1;
-    max-width: 480px;
+    max-width: 100%;
 }
 
 /* Hide in navbar on mobile, show on desktop */
 .search-desktop {
     display: none;
+    flex: 1;
+    max-width: 800px;
+    margin: 0 24px;
 }
 
 /* Show under navbar on mobile, hide on desktop */
