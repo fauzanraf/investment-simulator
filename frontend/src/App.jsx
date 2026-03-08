@@ -15,6 +15,7 @@ import {
     AlertCircle,
     Building2,
     Layers,
+    Calculator,
 } from 'lucide-react';
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -488,6 +489,11 @@ export default function App() {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* DCA Simulator */}
+                {chartData && chartData.length > 0 && (
+                    <DCASimulator chartData={chartData} currency={stockInfo?.currency} />
                 )}
 
                 {/* ETF Holdings & Sector Weightings */}
@@ -1486,6 +1492,122 @@ function ETFSectorWeightingsSection({ sectors }) {
                                 <span className="etf-sector-pct">{(arc.pct * 100).toFixed(1)}%</span>
                             </div>
                         ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DCA SIMULATOR
+// ═══════════════════════════════════════════════════════════════
+function DCASimulator({ chartData, currency = 'USD' }) {
+    const [initialAmount, setInitialAmount] = useState(1000);
+    const [monthlyContribution, setMonthlyContribution] = useState(100);
+
+    const dcaResult = useMemo(() => {
+        if (!chartData || chartData.length === 0) return null;
+
+        let shares = 0;
+        let totalInvested = 0;
+
+        // Iterate through chartData (which represents chronological price history)
+        for (let i = 0; i < chartData.length; i++) {
+            const price = chartData[i].close;
+            if (!price) continue;
+
+            if (i === 0) {
+                // Initial investment on the first available date
+                shares += initialAmount / price;
+                totalInvested += initialAmount;
+            } else {
+                // Monthly contribution for subsequent dates
+                shares += monthlyContribution / price;
+                totalInvested += monthlyContribution;
+            }
+        }
+
+        const currentPrice = chartData[chartData.length - 1].close;
+        const portfolioValue = shares * currentPrice;
+        const totalReturn = portfolioValue - totalInvested;
+        const returnPct = totalInvested > 0 ? (totalReturn / totalInvested) * 100 : 0;
+
+        return {
+            totalInvested,
+            portfolioValue,
+            totalReturn,
+            returnPct
+        };
+    }, [chartData, initialAmount, monthlyContribution]);
+
+    if (!dcaResult) return null;
+
+    const isPositive = dcaResult.totalReturn >= 0;
+
+    return (
+        <div className="card animate-fade-in stagger-4">
+            <div className="card-header">
+                <div className="card-title">
+                    <Calculator size={18} style={{ color: 'var(--accent-indigo)' }} />
+                    DCA Simulator
+                </div>
+                <p className="card-subtitle">
+                    Dollar Cost Averaging: See how your portfolio would have grown based on the selected timeframe.
+                </p>
+            </div>
+            <div className="card-body">
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label className="metric-label" style={{ display: 'block', marginBottom: '8px' }}>
+                            Initial Amount ({getCurrencySymbol(currency)})
+                        </label>
+                        <input
+                            type="number"
+                            className="search-input"
+                            style={{ width: '100%', padding: '10px' }}
+                            value={initialAmount}
+                            onChange={(e) => setInitialAmount(Number(e.target.value) || 0)}
+                            min="0"
+                        />
+                    </div>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label className="metric-label" style={{ display: 'block', marginBottom: '8px' }}>
+                            Planned Monthly Savings ({getCurrencySymbol(currency)})
+                        </label>
+                        <input
+                            type="number"
+                            className="search-input"
+                            style={{ width: '100%', padding: '10px' }}
+                            value={monthlyContribution}
+                            onChange={(e) => setMonthlyContribution(Number(e.target.value) || 0)}
+                            min="0"
+                        />
+                    </div>
+                </div>
+
+                <div className="metrics-grid">
+                    <div className="metric-item">
+                        <div className="metric-label">Total Invested</div>
+                        <div className="metric-value">{formatCurrency(dcaResult.totalInvested, currency)}</div>
+                    </div>
+                    <div className="metric-item">
+                        <div className="metric-label">Portfolio Value</div>
+                        <div className="metric-value">{formatCurrency(dcaResult.portfolioValue, currency)}</div>
+                    </div>
+                    <div className="metric-item">
+                        <div className="metric-label">Total Return</div>
+                        <div className={`metric-value ${isPositive ? 'positive' : 'negative'}`}>
+                            {isPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                            {formatCurrency(dcaResult.totalReturn, currency)}
+                        </div>
+                    </div>
+                    <div className="metric-item">
+                        <div className="metric-label">Return %</div>
+                        <div className={`metric-value ${isPositive ? 'positive' : 'negative'}`}>
+                            {isPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                            {formatPercent(dcaResult.returnPct)}
+                        </div>
                     </div>
                 </div>
             </div>
