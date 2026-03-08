@@ -309,7 +309,7 @@ export default function App() {
         return (
             <div className="loading-page">
                 <div className="spinner" />
-                <p className="loading-text">Loading {loadingTicker} data from Yahoo Finance...</p>
+                <p className="loading-text">Loading {loadingTicker.length === 24 ? 'mutual fund' : loadingTicker} data...</p>
             </div>
         );
     }
@@ -346,7 +346,7 @@ export default function App() {
                                 border: '1px solid var(--border-light)',
                             }}
                         >
-                            YF
+                            {stockInfo?.isMakmur ? 'MF' : 'YF'}
                         </div>
                     </div>
                 </div>
@@ -362,7 +362,7 @@ export default function App() {
                     <div className="container sticky-ticker-inner">
                         <div className="sticky-ticker-left">
                             <span className="sticky-ticker-name">{stockInfo.name || ticker}</span>
-                            <span className="sticky-ticker-badge">{ticker}</span>
+                            <span className="sticky-ticker-badge">{stockInfo?.isMakmur ? 'Mutual Fund' : ticker}</span>
                         </div>
                         <div className="sticky-ticker-right">
                             <span className="sticky-ticker-price">
@@ -398,7 +398,7 @@ export default function App() {
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
                                 <h1 className="stock-title">{stockInfo.name || ticker}</h1>
-                                <span className="stock-ticker-badge">{ticker}</span>
+                                <span className="stock-ticker-badge">{stockInfo?.isMakmur ? 'Mutual Fund' : ticker}</span>
                             </div>
                             <p className="stock-meta">
                                 {stockInfo.sector && (
@@ -634,21 +634,24 @@ export default function App() {
                 )}
 
                 {/* Revenue vs Profit */}
-                {financialData && financialData.incomeStatement?.length > 0 && (
+                {!stockInfo?.isMakmur && financialData && financialData.incomeStatement?.length > 0 && (
                     <RevenueVsProfitSection data={financialData.incomeStatement} currency={stockInfo?.currency} />
                 )}
 
                 {/* Dividends */}
-                {dividendData && (dividendData.dividends?.length > 0 || dividendData.annual?.length > 0) && (
+                {!stockInfo?.isMakmur && dividendData && (dividendData.dividends?.length > 0 || dividendData.annual?.length > 0) && (
                     <DividendSection data={dividendData} currency={stockInfo?.currency} />
                 )}
 
                 {/* Financials */}
-                {financialData && <FinancialSection data={financialData} currency={stockInfo?.currency} />}
+                {!stockInfo?.isMakmur && financialData && <FinancialSection data={financialData} currency={stockInfo?.currency} />}
 
                 {/* Footer */}
                 <footer className="footer">
-                    Data provided by Yahoo Finance via yfinance. For informational purposes only — not financial advice.
+                    {stockInfo?.isMakmur
+                        ? 'Mutual fund data provided by Makmur.id. For informational purposes only — not financial advice.'
+                        : 'Data provided by Yahoo Finance via yfinance. For informational purposes only — not financial advice.'
+                    }
                 </footer>
             </main>
         </div>
@@ -721,7 +724,7 @@ function SearchBar({ onSelect }) {
                     id="ticker-search"
                     className="search-input"
                     type="text"
-                    placeholder="Search ticker (e.g. AAPL, MSFT, TSLA)..."
+                    placeholder="Search ticker or mutual fund (e.g. AAPL, Sucorinvest)..."
                     value={query}
                     onChange={handleChange}
                     onKeyDown={handleKeyDown}
@@ -734,9 +737,9 @@ function SearchBar({ onSelect }) {
                 <div className="search-dropdown">
                     {results.map((r, i) => (
                         <div key={`${r.symbol}-${i}`} className="search-item" onClick={() => handleSelect(r.symbol)}>
-                            <span className="search-item-symbol">{r.symbol}</span>
-                            <span className="search-item-name">{r.name}</span>
-                            <span className="search-item-type">{r.type}</span>
+                            <span className="search-item-symbol">{r.isMakmur ? '🏦' : ''} {r.isMakmur ? r.name?.substring(0, 20) : r.symbol}</span>
+                            <span className="search-item-name">{r.isMakmur ? r.name : r.name}</span>
+                            <span className="search-item-type">{r.isMakmur ? 'Mutual Fund' : r.type}</span>
                         </div>
                     ))}
                 </div>

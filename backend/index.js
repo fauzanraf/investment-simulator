@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const YahooFinance = require('yahoo-finance2').default; // v3 class
 let yahooFinance;
 try {
@@ -17,6 +18,59 @@ const safeVal = (val) => {
     return val;
 };
 
+// ── MAKMUR.ID INTEGRATION ──────────────────────────────────────────────
+const isMakmurId = (ticker) => ticker && ticker.length === 24 && /^[0-9a-f]{24}$/i.test(ticker);
+
+const MAKMUR_SECRET = '119AA2BCDB9D74ACCEB8F2C58941A018A1E1A673064444619D2D7186FBB1DB10119AA2BCDB9D74ACCEB8F2C58941A018A1E1A673064444619D2D7186FBB1DB10';
+const makmurSign = (path) => {
+    return crypto.createHmac('sha1', MAKMUR_SECRET).update(path).digest('base64');
+};
+const makmurFetch = async (path) => {
+    const url = `https://api.makmur.id${path}`;
+    const sig = makmurSign(path);
+    const res = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Origin': 'https://www.makmur.id',
+            'Referer': 'https://www.makmur.id/',
+            'x-request-signature': sig
+        }
+    });
+    return res.json();
+};
+
+let makmurCache = null;
+let makmurCacheTime = 0;
+const getMakmurProducts = async () => {
+    if (makmurCache && (Date.now() - makmurCacheTime < 3600000)) return makmurCache;
+    try {
+        const res = await fetch('https://www.makmur.id/id/reksadana/daftar-produk', { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const html = await res.text();
+        const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.+?)<\/script>/);
+        if (match) {
+            const data = JSON.parse(match[1]);
+            const pageProps = data.props?.pageProps || {};
+            if (pageProps.productData) {
+                makmurCache = Object.values(pageProps.productData).map(p => ({
+                    symbol: p._id,
+                    name: p.name,
+                    type: 'MUTUALFUND',
+                    exchange: 'Makmur',
+                    isMakmur: true,
+                    makmurData: p
+                }));
+                makmurCacheTime = Date.now();
+                return makmurCache;
+            }
+        }
+    } catch (e) {
+        console.error("Makmur products error:", e);
+    }
+    return [];
+};
+
+
 // ── 1. Ticker Search ──────────────────────────────────────────────────
 app.get('/api/search', async (req, res) => {
     try {
@@ -31,7 +85,15 @@ app.get('/api/search', async (req, res) => {
             type: q.quoteType || '',
             exchange: q.exchange || ''
         }));
-        res.json(quotes);
+
+        let makmurMatches = [];
+        try {
+            const makmurAll = await getMakmurProducts();
+            const qLower = query.toLowerCase();
+            makmurMatches = makmurAll.filter(p => p.name.toLowerCase().includes(qLower)).slice(0, 5);
+        } catch (e) { }
+
+        res.json([...quotes, ...makmurMatches]);
     } catch (err) {
         console.error('Search error:', err);
         res.status(500).json({ error: err.message });
@@ -44,6 +106,53 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
         const { ticker } = req.params;
         const period = req.query.period || '10y';
         const interval = req.query.interval || '1mo';
+
+        // Direct handling for Makmur timeseries
+        if (isMakmurId(ticker)) {
+            let makmurPeriod = period.toLowerCase();
+            if (makmurPeriod === '10y') makmurPeriod = 'max'; // Fallback for 10y API
+
+            try {
+                const path = `/timeseries/products/data/${ticker}/price/${makmurPeriod}`;
+                const rawMakmur = await makmurFetch(path);
+
+                // Makmur returns a flat array of {date: YYYYMMDD, value: scaledNAV}
+                const makmurArray = Array.isArray(rawMakmur) ? rawMakmur : rawMakmur.data;
+                if (!makmurArray || !makmurArray.length) return res.status(404).json({ error: `No Makmur data found for ${ticker}` });
+
+                let data = [];
+                let currentTargetMonth = -1;
+                for (const item of makmurArray) {
+                    // Parse YYYYMMDD date format
+                    const dateStr = String(item.date);
+                    const year = dateStr.substring(0, 4);
+                    const month = dateStr.substring(4, 6);
+                    const day = dateStr.substring(6, 8);
+                    const isoDate = `${year}-${month}-${day}`;
+                    const price = item.value / 10000; // Scale down from internal representation
+
+                    const itemData = {
+                        date: isoDate,
+                        open: price, high: price, low: price, close: price, adjClose: price, volume: 0
+                    };
+                    const m = parseInt(month, 10);
+                    if (interval === '1mo' || interval === '1wk') {
+                        if (m !== currentTargetMonth) {
+                            data.push(itemData);
+                            currentTargetMonth = m;
+                        } else {
+                            data[data.length - 1] = itemData;
+                        }
+                    } else {
+                        data.push(itemData);
+                    }
+                }
+                return res.json({ ticker: ticker.toUpperCase(), period, interval, data, isMakmur: true });
+            } catch (err) {
+                console.error('Makmur history error:', err);
+                return res.status(500).json({ error: err.message });
+            }
+        }
 
         // Map python yfinance periods to JS dates
         const periodMap = {
@@ -91,6 +200,50 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
 app.get('/api/stock/:ticker/info', async (req, res) => {
     try {
         const { ticker } = req.params;
+
+        if (isMakmurId(ticker)) {
+            const allMakmur = await getMakmurProducts();
+            const product = allMakmur.find(p => p.symbol === ticker);
+            if (!product) return res.status(404).json({ error: "Makmur fund not found" });
+
+            const pData = product.makmurData;
+            return res.json({
+                symbol: pData._id,
+                name: pData.name,
+                sector: pData.category, // e.g. 'equity'
+                industry: 'Mutual Fund',
+                description: `Managed by ${pData.manager?.name || 'Unknown'}\nRisk Level: ${pData.riskLevel}\n1Y Return: ${pData.return1y / 100}%`,
+                website: `https://www.makmur.id/id/reksadana/detail/${pData.url}`,
+                country: 'Indonesia',
+                currency: pData.currency || 'IDR',
+                exchange: 'Makmur',
+                currentPrice: safeVal(pData.lastPrice),
+                previousClose: safeVal(pData.lastPrice),
+                open: safeVal(pData.lastPrice),
+                dayHigh: safeVal(pData.lastPrice),
+                dayLow: safeVal(pData.lastPrice),
+                fiftyTwoWeekHigh: null,
+                fiftyTwoWeekLow: null,
+                volume: 0,
+                avgVolume: 0,
+                marketCap: safeVal(pData.lastAum), // represent fund size as market cap
+                trailingPE: null,
+                forwardPE: null,
+                trailingEps: null,
+                forwardEps: null,
+                dividendYield: null,
+                dividendRate: null,
+                beta: null,
+                bookValue: null,
+                priceToBook: null,
+                fiftyDayAverage: null,
+                twoHundredDayAverage: null,
+                quoteType: 'MUTUALFUND',
+                isMakmur: true,
+                logoUrl: pData.manager?.logo
+            });
+        }
+
         const quote = await yahooFinance.quote(ticker);
         const quoteSummary = await yahooFinance.quoteSummary(ticker, {
             modules: ['assetProfile', 'summaryDetail', 'defaultKeyStatistics', 'financialData']
@@ -158,6 +311,9 @@ app.get('/api/stock/:ticker/info', async (req, res) => {
 app.get('/api/stock/:ticker/dividends', async (req, res) => {
     try {
         const { ticker } = req.params;
+        if (isMakmurId(ticker)) {
+            return res.json({ ticker: ticker.toUpperCase(), dividends: [], annual: [], isMakmur: true });
+        }
 
         // Fetch 20 years of dividends
         const period1 = new Date();
@@ -216,6 +372,9 @@ app.get('/api/stock/:ticker/dividends', async (req, res) => {
 app.get('/api/stock/:ticker/financials', async (req, res) => {
     try {
         const { ticker } = req.params;
+        if (isMakmurId(ticker)) {
+            return res.json({ ticker: ticker.toUpperCase(), incomeStatement: [], balanceSheet: [], cashFlow: [], isMakmur: true });
+        }
         const result = await yahooFinance.quoteSummary(ticker, {
             modules: ['incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory']
         });
@@ -251,6 +410,9 @@ app.get('/api/stock/:ticker/financials', async (req, res) => {
 app.get('/api/stock/:ticker/etf', async (req, res) => {
     try {
         const { ticker } = req.params;
+        if (isMakmurId(ticker)) {
+            return res.json({ ticker: ticker.toUpperCase(), topHoldings: [], sectorWeightings: [], isMakmur: true });
+        }
         const result = await yahooFinance.quoteSummary(ticker, {
             modules: ['topHoldings']
         });
