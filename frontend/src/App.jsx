@@ -988,9 +988,9 @@ function RevenueVsProfitSection({ data, currency = 'USD' }) {
         return data
             .map((period) => {
                 const year = new Date(period.period).getFullYear();
-                const revenue = period['Total Revenue'] ?? period['TotalRevenue'] ?? null;
-                const netIncome = period['Net Income'] ?? period['NetIncome'] ?? null;
-                const grossProfit = period['Gross Profit'] ?? period['GrossProfit'] ?? null;
+                const revenue = period['Total Revenue'] ?? period['TotalRevenue'] ?? period['totalRevenue'] ?? null;
+                const netIncome = period['Net Income'] ?? period['NetIncome'] ?? period['netIncome'] ?? null;
+                const grossProfit = period['Gross Profit'] ?? period['GrossProfit'] ?? period['grossProfit'] ?? null;
                 const profitMargin = revenue && netIncome ? (netIncome / revenue) * 100 : null;
                 const grossMargin = revenue && grossProfit ? (grossProfit / revenue) * 100 : null;
                 return { year, revenue, netIncome, grossProfit, profitMargin, grossMargin };
