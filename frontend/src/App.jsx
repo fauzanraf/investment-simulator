@@ -1044,8 +1044,81 @@ function ChartBrush({ data, customRange, setCustomRange }) {
     const leftX = PAD + (customRange[0] / 100) * (W - PAD * 2);
     const rightX = PAD + (customRange[1] / 100) * (W - PAD * 2);
 
+    const startIndex = Math.floor((customRange[0] / 100) * (data.length - 1));
+    const endIndex = Math.ceil((customRange[1] / 100) * (data.length - 1));
+    const startDate = data[startIndex]?.date ? new Date(data[startIndex].date) : new Date();
+    const endDate = data[endIndex]?.date ? new Date(data[endIndex].date) : new Date();
+
+    // Calculate duration
+    let durationText = '';
+    if (startDate && endDate) {
+        const totalMonths = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth());
+        if (totalMonths >= 12) {
+            const years = Math.floor(totalMonths / 12);
+            const months = totalMonths % 12;
+            durationText = `${years} Year${years > 1 ? 's' : ''}${months > 0 ? ` ${months} Month${months > 1 ? 's' : ''}` : ''}`;
+        } else {
+            durationText = `${totalMonths} Month${totalMonths !== 1 ? 's' : ''}`;
+        }
+    }
+
+    // Helper to snap to predefined intervals ending at the most recent date
+    const handleShortcut = (years) => {
+        const targetMonths = years * 12;
+        const totalDataMonths = (new Date(data[data.length - 1].date).getFullYear() - new Date(data[0].date).getFullYear()) * 12
+            + (new Date(data[data.length - 1].date).getMonth() - new Date(data[0].date).getMonth());
+
+        if (targetMonths >= totalDataMonths) {
+            setCustomRange([0, 100]); // Max out
+            return;
+        }
+
+        // Find the index that corresponds to approximately 'targetMonths' ago
+        const finalDate = new Date(data[data.length - 1].date);
+        const targetStartDate = new Date(finalDate);
+        targetStartDate.setMonth(finalDate.getMonth() - targetMonths);
+
+        let foundIdx = 0;
+        for (let i = data.length - 1; i >= 0; i--) {
+            const dDate = new Date(data[i].date);
+            if (dDate <= targetStartDate) {
+                foundIdx = i;
+                break;
+            }
+        }
+
+        const startPct = (foundIdx / (data.length - 1)) * 100;
+        setCustomRange([startPct, 100]);
+    };
+
     return (
         <div style={{ marginTop: '16px', userSelect: 'none', touchAction: 'none' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '500' }}>
+                    Duration: <span style={{ color: 'var(--accent-blue)' }}>{durationText || '0 Months'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                    {[1, 3, 5].map((y) => (
+                        <button
+                            key={y}
+                            onClick={() => handleShortcut(y)}
+                            style={{
+                                padding: '2px 8px',
+                                fontSize: '0.75rem',
+                                background: 'transparent',
+                                border: '1px solid var(--border-light)',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                color: 'var(--text-muted)'
+                            }}
+                            onMouseOver={e => { e.currentTarget.style.color = 'var(--accent-blue)'; e.currentTarget.style.borderColor = 'var(--accent-blue)'; }}
+                            onMouseOut={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-light)'; }}
+                        >
+                            {y}Y
+                        </button>
+                    ))}
+                </div>
+            </div>
             <svg
                 ref={svgRef}
                 viewBox={`0 0 ${W} ${H}`}
@@ -1082,8 +1155,8 @@ function ChartBrush({ data, customRange, setCustomRange }) {
                 />
             </svg>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                <span>{data[Math.floor((customRange[0] / 100) * (data.length - 1))]?.date}</span>
-                <span>{data[Math.ceil((customRange[1] / 100) * (data.length - 1))]?.date}</span>
+                <span>{data[startIndex]?.date}</span>
+                <span>{data[endIndex]?.date}</span>
             </div>
         </div>
     );
