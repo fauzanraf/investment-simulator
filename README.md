@@ -1,89 +1,81 @@
 # Investment Simulator
 
-A financial dashboard that simulates investments, showing key statistics, revenue vs profit, charts, and dividend history, powered by real market data using `yfinance`.
+A financial dashboard that simulates investments, showing key statistics, revenue vs profit, historical charts, dividend history, and ETF allocation data. Powered by real market data using `yahoo-finance2` via a custom Node.js backend.
 
 ## Architecture
-This project is split into two parts:
-1. **Frontend**: A React application using Vite.
-2. **Backend**: A Python Flask REST API server that provides Yahoo Finance data.
+The application uses a **split architecture**:
+1. **Frontend**: React (Vite) application hosted on GitHub Pages or any static host.
+2. **Backend**: Node.js Express server acting as an API proxy to `yahoo-finance2`. Hosted as a Vercel Serverless Function to bypass CORS and provide secure, reliable data fetching.
+
+**Features:**
+- 🔍 Ticker search (Stocks, ETFs, Mutual Funds)
+- 📊 Price history chart (1Y / 3Y / 5Y / 10Y)
+- 📈 Trailing returns & CAGR
+- 💰 Dividend history & annual chart
+- 📋 Financial statements (Income, Balance Sheet, Cash Flow)
+- 🏢 Company info & key statistics
+- 📉 Revenue vs Profit dual-axis chart
+- 🥧 ETF Top Holdings & Sector Weightings
 
 ---
 
-## How to Run It Yourself
+## How to Run It Yourself (Locally)
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (installed and ready)
-- [Python 3.x](https://www.python.org/) (installed and ready)
+- [Node.js](https://nodejs.org/) (v18+ recommended)
 
-### 1. Start the Backend Server
-The backend serves market data on `http://localhost:5000`.
+### 1. Clone & Install
+```bash
+git clone https://github.com/your-username/investment-simulator.git
+cd investment-simulator
+```
 
-1. Open your terminal and navigate to the `backend` folder:
+### 2. Start the Backend
+```bash
+cd backend
+npm install
+npm run dev
+```
+The backend will start on `http://localhost:5000`. It requires no API keys.
+
+### 3. Start the Frontend
+Open a new terminal window:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+The frontend proxy (`vite.config.js`) is configured to route `/api` requests to your local backend automatically.
+
+---
+
+## Deployment 
+
+### 1. Deploy the Backend to Vercel
+1. Install the Vercel CLI: `npm i -g vercel`
+2. Navigate to the `backend/` folder and initialize a deployment:
    ```bash
    cd backend
+   vercel
    ```
-2. (Optional but recommended) Create and activate a Virtual Environment:
-   ```bash
-   python -m venv venv
-   # On Windows:
-   venv\Scripts\activate
-   # On macOS/Linux:
-   source venv/bin/activate
+3. Follow the CLI prompts. Once deployed, Vercel will give you a production URL (e.g., `https://your-backend-app.vercel.app`).
+
+### 2. Deploy the Frontend to GitHub Pages
+1. Open `frontend/.env` (or create it) and set `VITE_API_URL` to your new Vercel backend URL:
+   ```env
+   VITE_API_URL=https://your-backend-app.vercel.app
    ```
-3. Install the required Python packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Run the Flask application:
-   ```bash
-   python app.py
-   ```
-You should see: `🚀 Investment Simulator API Server starting on http://localhost:5000`
-
-### 2. Start the Frontend Server
-The frontend runs the user interface, typically hosted on `http://localhost:5173`.
-
-1. Open a **new** terminal window and navigate to the `frontend` folder:
-   ```bash
-   cd frontend
-   ```
-2. Install the necessary Node modules:
-   ```bash
-   npm install
-   ```
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-4. Open the Local URL shown in your terminal (usually `http://localhost:5173`) in your web browser.
-
-## Deployment
-
-This project consists of a frontend (React) and a backend (Python Flask). **GitHub Pages can only host the frontend** because it only supports static files. 
-
-### 1. Deploying the Backend
-To make the application fully functional online, you must deploy the `backend/` folder to a service that supports Python, such as:
-- **[Render](https://render.com/)** (Free tier available)
-- **[Railway](https://railway.app/)**
-- **[Heroku](https://www.heroku.com/)**
-
-Once your backend is deployed, note the public URL (e.g., `https://my-investment-api.onrender.com`).
-
-### 2. Deploying the Frontend to GitHub Pages
-1. Open the `frontend/` folder.
-2. In your terminal, run:
+2. Build and deploy:
    ```bash
    npm run deploy
    ```
-   *(This script runs `vite build`, then uses the `gh-pages` package to push the `dist/` folder to the `gh-pages` branch).*
+   This builds the app and pushes the `dist/` folder to the `gh-pages` branch.
 
-3. **Connecting to your Deployed Backend**: 
-   By default, the deployed frontend will have an empty base URL and try to fetch from the same origin. 
-   To point it to your live backend, create a `.env` file in the `frontend/` folder before running the deploy command:
-   ```env
-   VITE_API_URL=https://my-investment-api.onrender.com
-   ```
-   Then run `npm run deploy` again.
+---
+
+## API Rate Limits
+- The backend uses robust endpoints from Yahoo Finance.
+- It is recommended to use the `yahoo-finance2` caching mechanisms if you plan to scale the application to many concurrent users.
 
 ---
 

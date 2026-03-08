@@ -4,12 +4,10 @@ dist/
 .cache/
 *.log
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-venv/
+# Environment
 .env
+.env.local
+.env.*
 
 # IDE
 .vscode/

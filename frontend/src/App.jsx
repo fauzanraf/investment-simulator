@@ -83,12 +83,12 @@ const api = {
     },
     dividends: async (ticker) => {
         const res = await fetch(`${API_BASE}/api/stock/${ticker}/dividends`);
-        if (!res.ok) throw new Error(`Dividends failed for ${ticker}`);
+        if (!res.ok) return null;
         return res.json();
     },
     financials: async (ticker) => {
         const res = await fetch(`${API_BASE}/api/stock/${ticker}/financials`);
-        if (!res.ok) throw new Error(`Financials failed for ${ticker}`);
+        if (!res.ok) return null;
         return res.json();
     },
     etf: async (ticker) => {
@@ -102,8 +102,8 @@ const api = {
 //  MAIN APP
 // ═══════════════════════════════════════════════════════════════
 export default function App() {
-    const [ticker, setTicker] = useState('SPY');
-    const [loadingTicker, setLoadingTicker] = useState('SPY');
+    const [ticker, setTicker] = useState('AAPL');
+    const [loadingTicker, setLoadingTicker] = useState('AAPL');
     const [stockInfo, setStockInfo] = useState(null);
     const [historyData, setHistoryData] = useState(null);
     const [dividendData, setDividendData] = useState(null);
@@ -135,18 +135,24 @@ export default function App() {
         setHoveredPoint(null);
 
         try {
-            // Fetch sequentially to avoid Yahoo Finance rate limits
-            const info = await api.info(symbol);
+            // Fetch sequentially or parallel depending on backend limits
+            // The new Node backend can handle parallel requests well
+            const infoPromise = api.info(symbol);
+            const historyPromise = api.history(symbol);
+            const dividendsPromise = api.dividends(symbol);
+            const financialsPromise = api.financials(symbol);
+
+            const info = await infoPromise;
             setStockInfo(info);
             setTicker(symbol.toUpperCase());
 
-            const history = await api.history(symbol);
+            const history = await historyPromise;
             setHistoryData(history);
 
-            const dividends = await api.dividends(symbol);
+            const dividends = await dividendsPromise;
             setDividendData(dividends);
 
-            const financials = await api.financials(symbol);
+            const financials = await financialsPromise;
             setFinancialData(financials);
 
             // Fetch ETF-specific data if applicable
