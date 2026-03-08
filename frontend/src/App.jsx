@@ -205,7 +205,7 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [hoveredPoint, setHoveredPoint] = useState(null);
-    const [timeframe, setTimeframe] = useState('20Y');
+    const [timeframe, setTimeframe] = useState('Custom');
     const [customRange, setCustomRange] = useState([0, 100]);
     const [showStickyBar, setShowStickyBar] = useState(false);
     const headerRef = useRef(null);
@@ -282,6 +282,30 @@ export default function App() {
             setLoading(false);
         }
     }, []);
+
+    // Set initial custom range to ~5 years on successful load of historyData
+    useEffect(() => {
+        if (historyData?.data?.length > 0) {
+            const data = historyData.data;
+            const targetMonths = 5 * 12;
+            const finalDate = new Date(data[data.length - 1].date);
+            const targetStartDate = new Date(finalDate);
+            targetStartDate.setMonth(finalDate.getMonth() - targetMonths);
+
+            let foundIdx = 0;
+            for (let i = data.length - 1; i >= 0; i--) {
+                const dDate = new Date(data[i].date);
+                if (dDate <= targetStartDate) {
+                    foundIdx = i;
+                    break;
+                }
+            }
+
+            const startPct = (foundIdx / (data.length - 1)) * 100;
+            setCustomRange([startPct, 100]);
+            setTimeframe('Custom'); // Ensure timeframe forces to custom on reload
+        }
+    }, [historyData]);
 
     useEffect(() => {
         loadTicker('SPY');
