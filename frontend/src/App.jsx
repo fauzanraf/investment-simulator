@@ -62,6 +62,36 @@ const calcCAGR = (current, past, years) => {
     return (((current / past) ** (1 / years)) - 1) * 100;
 };
 
+const calcXIRR = (cashFlows, guess = 0.1) => {
+    if (!cashFlows || cashFlows.length === 0) return null;
+
+    const sorted = [...cashFlows].sort((a, b) => a.date - b.date);
+    const maxIter = 100;
+    const tol = 1e-6;
+    let rate = guess;
+    const minDate = sorted[0].date;
+    const getDays = (date) => (date - minDate) / (1000 * 60 * 60 * 24);
+
+    for (let i = 0; i < maxIter; i++) {
+        let f = 0;
+        let df = 0;
+        for (let j = 0; j < sorted.length; j++) {
+            const days = getDays(sorted[j].date);
+            const t = days / 365.0;
+            const amount = sorted[j].amount;
+            f += amount / Math.pow(1 + rate, t);
+            if (t > 0) {
+                df -= (t * amount) / Math.pow(1 + rate, t + 1);
+            }
+        }
+        const nextRate = rate - f / df;
+        if (Math.abs(nextRate - rate) < tol) return nextRate;
+        rate = nextRate;
+        if (rate <= -1) rate = -0.999999;
+    }
+    return rate;
+};
+
 const calcDCA = (all, monthsAgo, initialAmount, monthlyContribution) => {
     if (!all || all.length === 0 || monthsAgo <= 0) return null;
 
@@ -77,32 +107,49 @@ const calcDCA = (all, monthsAgo, initialAmount, monthlyContribution) => {
     let shares = 0;
     let totalInvested = 0;
     let actualMonths = 0;
+    const cashFlows = [];
 
     for (let i = startIndex; i < all.length; i++) {
         const price = all[i]?.adjClose || all[i]?.close;
-        if (!price) continue;
+        const dateStr = all[i]?.date;
+        if (!price || !dateStr) continue;
+
+        const dateObj = new Date(dateStr);
         if (actualMonths === 0) {
             shares += initAmt / price;
             totalInvested += initAmt;
+            cashFlows.push({ amount: -initAmt, date: dateObj });
         } else {
             shares += monthlyAmt / price;
             totalInvested += monthlyAmt;
+            cashFlows.push({ amount: -monthlyAmt, date: dateObj });
         }
         actualMonths++;
     }
-    const currentPrice = all[all.length - 1]?.adjClose || all[all.length - 1]?.close;
+
+    const lastItem = all[all.length - 1];
+    const currentPrice = lastItem?.adjClose || lastItem?.close;
     if (!currentPrice || actualMonths === 0) return null;
+
     const portfolioValue = shares * currentPrice;
+
+    cashFlows.push({ amount: portfolioValue, date: new Date(lastItem.date) });
 
     // Total Return %
     const totalReturnPct = totalInvested > 0 ? ((portfolioValue - totalInvested) / totalInvested) * 100 : 0;
 
-    const years = actualMonths / 12;
-    if (years <= 0 || totalInvested <= 0) return null;
-    const cagr = ((portfolioValue / totalInvested) ** (1 / years)) - 1;
+    let xirr = calcXIRR(cashFlows);
+    if (xirr === null || isNaN(xirr)) {
+        const years = actualMonths / 12;
+        if (years > 0 && totalInvested > 0) {
+            xirr = ((portfolioValue / totalInvested) ** (1 / years)) - 1;
+        } else {
+            xirr = 0;
+        }
+    }
 
     return {
-        cagr: cagr * 100,
+        xirr: xirr * 100,
         trailing: totalReturnPct
     };
 };
@@ -288,12 +335,12 @@ export default function App() {
                 '5y': calcCAGR(current, p5y, 5),
                 '10y': calcCAGR(current, p10y, 10),
             },
-            dcaCagr: {
-                ytd: calcDCA(all, ytdMonths, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
-                '1y': calcDCA(all, 12, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
-                '3y': calcDCA(all, 36, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
-                '5y': calcDCA(all, 60, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
-                '10y': calcDCA(all, 120, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
+            dcaXirr: {
+                ytd: calcDCA(all, ytdMonths, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
+                '1y': calcDCA(all, 12, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
+                '3y': calcDCA(all, 36, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
+                '5y': calcDCA(all, 60, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
+                '10y': calcDCA(all, 120, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
             },
             dcaTrailing: {
                 ytd: calcDCA(all, ytdMonths, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
@@ -576,11 +623,11 @@ export default function App() {
                             <div className="card-header">
                                 <div className="card-title">
                                     <Calculator size={18} style={{ color: 'var(--accent-blue)' }} />
-                                    DCA CAGR
+                                    DCA XIRR
                                     <span className="info-tooltip-trigger">
                                         <Info size={15} style={{ color: 'var(--text-muted)' }} />
                                         <span className="info-tooltip-content">
-                                            Return rate if you continually bought shares at the configured DCA settings below instead of a lumpsum.
+                                            Return rate (XIRR) if you continually bought shares at the configured DCA settings below instead of a lumpsum.
                                         </span>
                                     </span>
                                 </div>
@@ -588,11 +635,11 @@ export default function App() {
                             </div>
                             <div className="card-body">
                                 <div className="metrics-grid">
-                                    <MetricItem label="YTD (Ann.)" value={metrics.dcaCagr.ytd} />
-                                    <MetricItem label="1 Year" value={metrics.dcaCagr['1y']} />
-                                    <MetricItem label="3 Years" value={metrics.dcaCagr['3y']} />
-                                    <MetricItem label="5 Years" value={metrics.dcaCagr['5y']} />
-                                    <MetricItem label="10 Years" value={metrics.dcaCagr['10y']} />
+                                    <MetricItem label="YTD (Ann.)" value={metrics.dcaXirr.ytd} />
+                                    <MetricItem label="1 Year" value={metrics.dcaXirr['1y']} />
+                                    <MetricItem label="3 Years" value={metrics.dcaXirr['3y']} />
+                                    <MetricItem label="5 Years" value={metrics.dcaXirr['5y']} />
+                                    <MetricItem label="10 Years" value={metrics.dcaXirr['10y']} />
                                 </div>
                             </div>
                         </div>
