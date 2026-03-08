@@ -647,12 +647,12 @@ export default function App() {
                 {/* Chart */}
                 {chartData.length > 0 && (
                     <div className="card animate-fade-in stagger-2">
-                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                             <div className="card-title">
                                 <BarChart3 size={18} style={{ color: 'var(--accent-blue)' }} />
                                 Price History
                             </div>
-                            <div style={{ display: 'flex', gap: 4 }}>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                 {availableTimeframes.map((tf) => (
                                     <button
                                         key={tf}
@@ -1213,11 +1213,11 @@ function ChartBrush({ data, customRange, setCustomRange }) {
 
     return (
         <div style={{ marginTop: '16px', userSelect: 'none', touchAction: 'none' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '500' }}>
                     Duration: <span style={{ color: 'var(--accent-blue)' }}>{durationText || '0 Months'}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '4px' }}>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                     {[1, 3, 5, 10].map((y) => (
                         <button
                             key={y}

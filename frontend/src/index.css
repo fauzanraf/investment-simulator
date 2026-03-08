@@ -253,10 +253,13 @@ body {
     display: none;
 }
 
-@media (max-width: 639px) { /* Tailwinds standard sm breakpoint */
+@media (max-width: 639px) {
+
+    /* Tailwinds standard sm breakpoint */
     .duration-label-full {
         display: none;
     }
+
     .duration-label-short {
         display: inline;
     }
@@ -675,8 +678,14 @@ body {
 /* ── Metric Items ──────────────────────────────────────────── */
 .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 12px;
+}
+
+@media (min-width: 480px) {
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 @media (min-width: 640px) {
