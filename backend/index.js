@@ -26,18 +26,31 @@ const makmurSign = (path) => {
     return crypto.createHmac('sha1', MAKMUR_SECRET).update(path).digest('base64');
 };
 const makmurFetch = async (path) => {
-    const url = `https://api.makmur.id${path}`;
-    const sig = makmurSign(path);
-    const res = await fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json',
-            'Origin': 'https://www.makmur.id',
-            'Referer': 'https://www.makmur.id/',
-            'x-request-signature': sig
+    try {
+        const url = `https://api.makmur.id${path}`;
+        const sig = makmurSign(path);
+        const res = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json',
+                'Origin': 'https://www.makmur.id',
+                'Referer': 'https://www.makmur.id/',
+                'x-request-signature': sig
+            }
+        });
+
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return await res.json();
+        } else {
+            const text = await res.text();
+            console.error(`Makmur API non-JSON response for ${path}:`, text.substring(0, 200));
+            return { error: text || 'Invalid response' };
         }
-    });
-    return res.json();
+    } catch (e) {
+        console.error(`Makmur fetch error for ${path}:`, e);
+        return { error: e.message };
+    }
 };
 
 let makmurCache = null;
@@ -110,7 +123,8 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
         // Direct handling for Makmur timeseries
         if (isMakmurId(ticker)) {
             let makmurPeriod = period.toLowerCase();
-            if (makmurPeriod === '10y') makmurPeriod = 'max'; // Fallback for 10y API
+            // Makmur only supports 1m, 3m, ytd, 1y, 3y, 5y. 'max' or '10y' should map to '5y'.
+            if (makmurPeriod === '10y' || makmurPeriod === 'max') makmurPeriod = '5y';
 
             try {
                 const path = `/timeseries/products/data/${ticker}/price/${makmurPeriod}`;
@@ -375,31 +389,37 @@ app.get('/api/stock/:ticker/financials', async (req, res) => {
         if (isMakmurId(ticker)) {
             return res.json({ ticker: ticker.toUpperCase(), incomeStatement: [], balanceSheet: [], cashFlow: [], isMakmur: true });
         }
-        const result = await yahooFinance.quoteSummary(ticker, {
-            modules: ['incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory']
-        });
 
-        const formatStatement = (statementData) => {
-            if (!statementData || !statementData.length) return [];
-            return statementData.map(period => {
-                const dict = { period: period.endDate.toISOString().split('T')[0] };
-                for (const [key, value] of Object.entries(period)) {
-                    if (key !== 'endDate' && key !== 'maxAge' && typeof value === 'number') {
-                        dict[key] = value;
-                    } else if (value && typeof value === 'object' && value.raw !== undefined) {
-                        dict[key] = value.raw;
-                    }
-                }
-                return dict;
+        try {
+            const result = await yahooFinance.quoteSummary(ticker, {
+                modules: ['incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory']
             });
-        };
 
-        res.json({
-            ticker: ticker.toUpperCase(),
-            incomeStatement: formatStatement(result.incomeStatementHistory?.incomeStatementHistory),
-            balanceSheet: formatStatement(result.balanceSheetHistory?.balanceSheetStatements),
-            cashFlow: formatStatement(result.cashflowStatementHistory?.cashflowStatements)
-        });
+            const formatStatement = (statementData) => {
+                if (!statementData || !statementData.length) return [];
+                return statementData.map(period => {
+                    const dict = { period: period.endDate.toISOString().split('T')[0] };
+                    for (const [key, value] of Object.entries(period)) {
+                        if (key !== 'endDate' && key !== 'maxAge' && typeof value === 'number') {
+                            dict[key] = value;
+                        } else if (value && typeof value === 'object' && value.raw !== undefined) {
+                            dict[key] = value.raw;
+                        }
+                    }
+                    return dict;
+                });
+            };
+
+            res.json({
+                ticker: ticker.toUpperCase(),
+                incomeStatement: formatStatement(result.incomeStatementHistory?.incomeStatementHistory),
+                balanceSheet: formatStatement(result.balanceSheetHistory?.balanceSheetStatements),
+                cashFlow: formatStatement(result.cashflowStatementHistory?.cashflowStatements)
+            });
+        } catch (innerErr) {
+            console.error(`QuoteSummary (financials) failed for ${ticker}:`, innerErr.message);
+            res.json({ ticker: ticker.toUpperCase(), incomeStatement: [], balanceSheet: [], cashFlow: [] });
+        }
     } catch (err) {
         console.error('Financials error:', err);
         res.status(500).json({ error: err.message });
@@ -413,34 +433,39 @@ app.get('/api/stock/:ticker/etf', async (req, res) => {
         if (isMakmurId(ticker)) {
             return res.json({ ticker: ticker.toUpperCase(), topHoldings: [], sectorWeightings: [], isMakmur: true });
         }
-        const result = await yahooFinance.quoteSummary(ticker, {
-            modules: ['topHoldings']
-        });
 
-        if (!result.topHoldings) {
-            return res.status(400).json({ error: `${ticker} is not an ETF or no holdings data` });
+        try {
+            const result = await yahooFinance.quoteSummary(ticker, {
+                modules: ['topHoldings']
+            });
+
+            if (!result.topHoldings) {
+                return res.status(400).json({ error: `${ticker} is not an ETF or no holdings data` });
+            }
+
+            const holdings = result.topHoldings;
+            const topHoldings = (holdings.holdings || []).map(h => ({
+                symbol: h.symbol,
+                name: h.holdingName,
+                weight: h.holdingPercent
+            }));
+
+            const sectorWeightings = (holdings.sectorWeightings || []).map(s => {
+                const key = Object.keys(s)[0];
+                const weight = s[key];
+                const name = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                return { sector: name, weight };
+            });
+
+            res.json({
+                ticker: ticker.toUpperCase(),
+                topHoldings,
+                sectorWeightings
+            });
+        } catch (innerErr) {
+            console.error(`QuoteSummary (etf) failed for ${ticker}:`, innerErr.message);
+            res.json({ ticker: ticker.toUpperCase(), topHoldings: [], sectorWeightings: [] });
         }
-
-        const holdings = result.topHoldings;
-        const topHoldings = (holdings.holdings || []).map(h => ({
-            symbol: h.symbol,
-            name: h.holdingName,
-            weight: h.holdingPercent
-        }));
-
-        const sectorWeightings = (holdings.sectorWeightings || []).map(s => {
-            // Unpack object { "realestate": 0.05 } -> sector: Real Estate, weight: 0.05
-            const key = Object.keys(s)[0];
-            const weight = s[key];
-            const name = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            return { sector: name, weight };
-        });
-
-        res.json({
-            ticker: ticker.toUpperCase(),
-            topHoldings,
-            sectorWeightings
-        });
     } catch (err) {
         console.error('ETF error:', err);
         res.status(500).json({ error: err.message });
