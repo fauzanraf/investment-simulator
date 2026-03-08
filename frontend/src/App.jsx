@@ -431,15 +431,6 @@ export default function App() {
         };
     }, [historyData, timeframe, customRange, dcaInitialAmount, dcaMonthlyContribution]);
 
-    if (loading) {
-        return (
-            <div className="loading-page">
-                <div className="spinner" />
-                <p className="loading-text">Loading {loadingTicker.length === 24 ? 'mutual fund' : loadingTicker} data...</p>
-            </div>
-        );
-    }
-
     // Helper to get custom duration label
     const customDurationLabel = useMemo(() => {
         if (!historyData?.data?.length || timeframe !== 'Custom') return null;
@@ -457,6 +448,15 @@ export default function App() {
         }
         return `${totalMonths} Month${totalMonths !== 1 ? 's' : ''}`;
     }, [historyData, timeframe, customRange]);
+
+    if (loading) {
+        return (
+            <div className="loading-page">
+                <div className="spinner" />
+                <p className="loading-text">Loading {loadingTicker.length === 24 ? 'mutual fund' : loadingTicker} data...</p>
+            </div>
+        );
+    }
 
     return (
         <div>
