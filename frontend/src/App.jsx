@@ -433,8 +433,8 @@ export default function App() {
     }, [historyData, timeframe, customRange, dcaInitialAmount, dcaMonthlyContribution]);
 
     // Helper to get custom duration label
-    const customDurationLabel = useMemo(() => {
-        if (!historyData?.data?.length || timeframe !== 'Custom') return null;
+    const { full: customDurationLabel, short: customDurationLabelShort } = useMemo(() => {
+        if (!historyData?.data?.length || timeframe !== 'Custom') return { full: null, short: null };
         const all = historyData.data;
         const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
         const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
@@ -442,12 +442,18 @@ export default function App() {
         const endDate = all[endIdx]?.date ? new Date(all[endIdx].date) : new Date();
 
         const totalMonths = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth());
+        let full = '';
+        let short = '';
         if (totalMonths >= 12) {
             const years = Math.floor(totalMonths / 12);
             const months = totalMonths % 12;
-            return `${years} Year${years > 1 ? 's' : ''}${months > 0 ? ` ${months} Month${months > 1 ? 's' : ''}` : ''}`;
+            full = `${years} Year${years > 1 ? 's' : ''}${months > 0 ? ` ${months} Month${months > 1 ? 's' : ''}` : ''}`;
+            short = `${years}Y`;
+        } else {
+            full = `${totalMonths} Month${totalMonths !== 1 ? 's' : ''}`;
+            short = `${totalMonths}M`;
         }
-        return `${totalMonths} Month${totalMonths !== 1 ? 's' : ''}`;
+        return { full, short };
     }, [historyData, timeframe, customRange]);
 
     if (loading) {
@@ -517,7 +523,8 @@ export default function App() {
                                     fontSize: '0.75rem',
                                     fontWeight: '600'
                                 }}>
-                                    {customDurationLabel}
+                                    <span className="duration-label-full">{customDurationLabel}</span>
+                                    <span className="duration-label-short">{customDurationLabelShort}</span>
                                 </span>
                             )}
                         </div>
@@ -565,7 +572,8 @@ export default function App() {
                                         fontSize: '0.8rem',
                                         fontWeight: '600'
                                     }}>
-                                        {customDurationLabel}
+                                        <span className="duration-label-full">{customDurationLabel}</span>
+                                        <span className="duration-label-short">{customDurationLabelShort}</span>
                                     </span>
                                 )}
                             </div>

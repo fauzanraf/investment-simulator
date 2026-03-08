@@ -245,6 +245,23 @@ body {
     pointer-events: auto;
 }
 
+.duration-label-full {
+    display: inline;
+}
+
+.duration-label-short {
+    display: none;
+}
+
+@media (max-width: 639px) { /* Tailwinds standard sm breakpoint */
+    .duration-label-full {
+        display: none;
+    }
+    .duration-label-short {
+        display: inline;
+    }
+}
+
 .sticky-ticker-inner {
     display: flex;
     align-items: center;
