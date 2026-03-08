@@ -123,8 +123,8 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
         // Direct handling for Makmur timeseries
         if (isMakmurId(ticker)) {
             let makmurPeriod = period.toLowerCase();
-            // Makmur only supports 1m, 3m, ytd, 1y, 3y, 5y. 'max' or '10y' should map to '5y'.
-            if (makmurPeriod === '10y' || makmurPeriod === 'max') makmurPeriod = '5y';
+            // Makmur only supports 1m, 3m, ytd, 1y, 3y, 5y. 'max', '10y', '20y' should map to '5y'.
+            if (['10y', '20y', 'max'].includes(makmurPeriod)) makmurPeriod = '5y';
 
             try {
                 const path = `/timeseries/products/data/${ticker}/price/${makmurPeriod}`;
@@ -170,9 +170,9 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
 
         // Map python yfinance periods to JS dates
         const periodMap = {
-            '1y': 1, '3y': 3, '5y': 5, '10y': 10, 'max': 20
+            '1y': 1, '3y': 3, '5y': 5, '10y': 10, '20y': 20, 'max': 50
         };
-        const years = periodMap[period.toLowerCase()] || 10;
+        const years = periodMap[period.toLowerCase()] || 20;
         const period1 = new Date();
         period1.setFullYear(period1.getFullYear() - years);
 

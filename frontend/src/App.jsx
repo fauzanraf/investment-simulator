@@ -164,7 +164,7 @@ const api = {
         if (!res.ok) throw new Error('Search failed');
         return res.json();
     },
-    history: async (ticker, period = '10y', interval = '1mo') => {
+    history: async (ticker, period = '20y', interval = '1mo') => {
         const res = await fetch(`${API_BASE}/api/stock/${ticker}/history?period=${period}&interval=${interval}`);
         if (!res.ok) throw new Error(`History failed for ${ticker}`);
         return res.json();
@@ -205,9 +205,22 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [hoveredPoint, setHoveredPoint] = useState(null);
-    const [timeframe, setTimeframe] = useState('10Y');
+    const [timeframe, setTimeframe] = useState('20Y');
+    const [customRange, setCustomRange] = useState([0, 100]);
     const [showStickyBar, setShowStickyBar] = useState(false);
     const headerRef = useRef(null);
+
+    const availableTimeframes = useMemo(() => {
+        if (stockInfo?.isMakmur) return ['1Y', '3Y', '5Y', 'Custom'];
+        return ['1Y', '3Y', '5Y', '10Y', '20Y', 'Custom'];
+    }, [stockInfo]);
+
+    // Force timeframe to valid state when changing ticker
+    useEffect(() => {
+        if (stockInfo && !availableTimeframes.includes(timeframe)) {
+            setTimeframe('5Y');
+        }
+    }, [stockInfo, availableTimeframes, timeframe]);
 
     // DCA Configuration State
     const [dcaInitialAmount, setDcaInitialAmount] = useState(1000);
@@ -278,10 +291,15 @@ export default function App() {
     const chartData = useMemo(() => {
         if (!historyData?.data?.length) return [];
         const all = historyData.data;
-        const tfMonths = { '1Y': 12, '3Y': 36, '5Y': 60, '10Y': all.length };
+        if (timeframe === 'Custom') {
+            const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
+            const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
+            return all.slice(startIdx, endIdx + 1);
+        }
+        const tfMonths = { '1Y': 12, '3Y': 36, '5Y': 60, '10Y': 120, '20Y': 240 };
         const months = tfMonths[timeframe] || all.length;
         return all.slice(Math.max(all.length - months, 0));
-    }, [historyData, timeframe]);
+    }, [historyData, timeframe, customRange]);
 
     // Calculate returns — only show periods that have enough data
     const metrics = useMemo(() => {
@@ -317,6 +335,34 @@ export default function App() {
         const p3y = getPrice(36);
         const p5y = getPrice(60);
         const p10y = getPrice(120);
+        const p20y = getPrice(240);
+
+        // Custom metrics calculation
+        let customTrailing = null;
+        let customCagr = null;
+        let customDcaXirr = null;
+        let customDcaTrailing = null;
+        if (timeframe === 'Custom') {
+            const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
+            const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
+            const customStart = all[startIdx];
+            const customEnd = all[endIdx];
+            if (customStart && customEnd) {
+                const sPrice = customStart.adjClose || customStart.close;
+                const ePrice = customEnd.adjClose || customEnd.close;
+                customTrailing = calcReturn(ePrice, sPrice);
+                const sDate = new Date(customStart.date);
+                const eDate = new Date(customEnd.date);
+                const customYears = ((eDate - sDate) / (1000 * 60 * 60 * 24)) / 365;
+                customCagr = calcCAGR(ePrice, sPrice, customYears);
+
+                const customMonths = Math.round(customYears * 12);
+                const customSlice = all.slice(0, endIdx + 1);
+                const dcaRes = calcDCA(customSlice, customMonths, dcaInitialAmount, dcaMonthlyContribution);
+                customDcaXirr = dcaRes?.xirr;
+                customDcaTrailing = dcaRes?.trailing;
+            }
+        }
 
         return {
             current,
@@ -327,6 +373,8 @@ export default function App() {
                 '3y': calcReturn(current, p3y),
                 '5y': calcReturn(current, p5y),
                 '10y': calcReturn(current, p10y),
+                '20y': calcReturn(current, p20y),
+                custom: customTrailing
             },
             cagr: {
                 ytd: calcCAGR(current, ytdPrice, ytdMonths / 12),
@@ -334,6 +382,8 @@ export default function App() {
                 '3y': calcCAGR(current, p3y, 3),
                 '5y': calcCAGR(current, p5y, 5),
                 '10y': calcCAGR(current, p10y, 10),
+                '20y': calcCAGR(current, p20y, 20),
+                custom: customCagr
             },
             dcaXirr: {
                 ytd: calcDCA(all, ytdMonths, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
@@ -341,6 +391,8 @@ export default function App() {
                 '3y': calcDCA(all, 36, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
                 '5y': calcDCA(all, 60, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
                 '10y': calcDCA(all, 120, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
+                '20y': calcDCA(all, 240, dcaInitialAmount, dcaMonthlyContribution)?.xirr,
+                custom: customDcaXirr
             },
             dcaTrailing: {
                 ytd: calcDCA(all, ytdMonths, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
@@ -348,9 +400,11 @@ export default function App() {
                 '3y': calcDCA(all, 36, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
                 '5y': calcDCA(all, 60, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
                 '10y': calcDCA(all, 120, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
+                '20y': calcDCA(all, 240, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
+                custom: customDcaTrailing
             }
         };
-    }, [historyData, dcaInitialAmount, dcaMonthlyContribution]);
+    }, [historyData, timeframe, customRange, dcaInitialAmount, dcaMonthlyContribution]);
 
     if (loading) {
         return (
@@ -523,7 +577,7 @@ export default function App() {
                                 Price History
                             </div>
                             <div style={{ display: 'flex', gap: 4 }}>
-                                {['1Y', '3Y', '5Y', '10Y'].map((tf) => (
+                                {availableTimeframes.map((tf) => (
                                     <button
                                         key={tf}
                                         className={`timeframe-btn ${timeframe === tf ? 'active' : ''}`}
@@ -536,6 +590,9 @@ export default function App() {
                         </div>
                         <div className="card-body">
                             <PriceChart data={chartData} hoveredPoint={hoveredPoint} setHoveredPoint={setHoveredPoint} currency={stockInfo?.currency} />
+                            {timeframe === 'Custom' && historyData?.data && (
+                                <ChartBrush data={historyData.data} customRange={customRange} setCustomRange={setCustomRange} />
+                            )}
                         </div>
                     </div>
                 )}
@@ -560,6 +617,8 @@ export default function App() {
                                     <MetricItem label="3 Years" value={metrics.trailing['3y']} />
                                     <MetricItem label="5 Years" value={metrics.trailing['5y']} />
                                     <MetricItem label="10 Years" value={metrics.trailing['10y']} />
+                                    {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.trailing['20y']} />}
+                                    {timeframe === 'Custom' && <MetricItem label="Custom" value={metrics.trailing.custom} />}
                                 </div>
                                 {metrics.totalMonths < 120 - 2 && (
                                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 12, fontStyle: 'italic' }}>
@@ -590,6 +649,8 @@ export default function App() {
                                     <MetricItem label="3 Years" value={metrics.cagr['3y']} />
                                     <MetricItem label="5 Years" value={metrics.cagr['5y']} />
                                     <MetricItem label="10 Years" value={metrics.cagr['10y']} />
+                                    {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.cagr['20y']} />}
+                                    {timeframe === 'Custom' && <MetricItem label="Custom" value={metrics.cagr.custom} />}
                                 </div>
                             </div>
                         </div>
@@ -615,6 +676,8 @@ export default function App() {
                                     <MetricItem label="3 Years" value={metrics.dcaTrailing['3y']} />
                                     <MetricItem label="5 Years" value={metrics.dcaTrailing['5y']} />
                                     <MetricItem label="10 Years" value={metrics.dcaTrailing['10y']} />
+                                    {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.dcaTrailing['20y']} />}
+                                    {timeframe === 'Custom' && <MetricItem label="Custom" value={metrics.dcaTrailing.custom} />}
                                 </div>
                             </div>
                         </div>
@@ -640,6 +703,8 @@ export default function App() {
                                     <MetricItem label="3 Years" value={metrics.dcaXirr['3y']} />
                                     <MetricItem label="5 Years" value={metrics.dcaXirr['5y']} />
                                     <MetricItem label="10 Years" value={metrics.dcaXirr['10y']} />
+                                    {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.dcaXirr['20y']} />}
+                                    {timeframe === 'Custom' && <MetricItem label="Custom" value={metrics.dcaXirr.custom} />}
                                 </div>
                             </div>
                         </div>
@@ -665,6 +730,7 @@ export default function App() {
                         setMonthlyContribution={setDcaMonthlyContribution}
                         timeframe={timeframe}
                         setTimeframe={setTimeframe}
+                        availableTimeframes={availableTimeframes}
                     />
                 )}
 
@@ -904,6 +970,121 @@ function PriceChart({ data, hoveredPoint, setHoveredPoint, currency = 'USD' }) {
                     )}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CHART BRUSH
+// ═══════════════════════════════════════════════════════════════
+function ChartBrush({ data, customRange, setCustomRange }) {
+    const W = 1000;
+    const H = 40;
+    const PAD = 5;
+
+    const closes = data.map((d) => d.close).filter(Boolean);
+    const minVal = Math.min(...closes);
+    const maxVal = Math.max(...closes);
+    const range = maxVal - minVal || 1;
+
+    const getX = (i) => PAD + (i / (data.length - 1)) * (W - PAD * 2);
+    const getY = (v) => H - PAD - ((v - minVal) / range) * (H - PAD * 2);
+
+    const pathPoints = data
+        .map((d, i) => (d.close != null ? `${getX(i)},${getY(d.close)}` : null))
+        .filter(Boolean);
+
+    const linePath = `M ${pathPoints.join(' L ')}`;
+
+    // Interactions
+    const svgRef = useRef(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragEdge, setDragEdge] = useState(null); // 'left', 'right', 'center'
+
+    const handlePointerDown = (e, edge) => {
+        setIsDragging(true);
+        setDragEdge(edge);
+        e.target.setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e) => {
+        if (!isDragging) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        const rawX = e.clientX - rect.left;
+        const scaleX = W / rect.width;
+        let x = rawX * scaleX;
+        x = Math.max(PAD, Math.min(W - PAD, x));
+        const pct = ((x - PAD) / (W - PAD * 2)) * 100;
+
+        setCustomRange(prev => {
+            let [l, r] = prev;
+            if (dragEdge === 'left') {
+                l = Math.min(pct, r - 5);
+                if (l < 0) l = 0;
+            } else if (dragEdge === 'right') {
+                r = Math.max(pct, l + 5);
+                if (r > 100) r = 100;
+            } else if (dragEdge === 'center') {
+                const span = r - l;
+                l = pct - span / 2;
+                r = pct + span / 2;
+                if (l < 0) { l = 0; r = span; }
+                if (r > 100) { r = 100; l = 100 - span; }
+            }
+            return [l, r];
+        });
+    };
+
+    const handlePointerUp = (e) => {
+        setIsDragging(false);
+        setDragEdge(null);
+        e.target.releasePointerCapture(e.pointerId);
+    };
+
+    const leftX = PAD + (customRange[0] / 100) * (W - PAD * 2);
+    const rightX = PAD + (customRange[1] / 100) * (W - PAD * 2);
+
+    return (
+        <div style={{ marginTop: '16px', userSelect: 'none', touchAction: 'none' }}>
+            <svg
+                ref={svgRef}
+                viewBox={`0 0 ${W} ${H}`}
+                preserveAspectRatio="none"
+                style={{ width: '100%', height: '40px', background: 'var(--bg-secondary)', borderRadius: '4px', overflow: 'hidden' }}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+            >
+                <path d={linePath} fill="none" stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+
+                {/* Selected Area */}
+                <rect
+                    x={leftX} y={0} width={rightX - leftX} height={H}
+                    fill="var(--accent-blue)" opacity="0.2"
+                    style={{ cursor: 'grab' }}
+                    onPointerDown={(e) => handlePointerDown(e, 'center')}
+                />
+
+                {/* Left Handle */}
+                <rect
+                    x={leftX - 5} y={0} width={10} height={H}
+                    fill="var(--accent-blue)"
+                    style={{ cursor: 'ew-resize' }}
+                    onPointerDown={(e) => handlePointerDown(e, 'left')}
+                />
+
+                {/* Right Handle */}
+                <rect
+                    x={rightX - 5} y={0} width={10} height={H}
+                    fill="var(--accent-blue)"
+                    style={{ cursor: 'ew-resize' }}
+                    onPointerDown={(e) => handlePointerDown(e, 'right')}
+                />
+            </svg>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                <span>{data[Math.floor((customRange[0] / 100) * (data.length - 1))]?.date}</span>
+                <span>{data[Math.ceil((customRange[1] / 100) * (data.length - 1))]?.date}</span>
+            </div>
         </div>
     );
 }
@@ -1677,7 +1858,7 @@ function ETFSectorWeightingsSection({ sectors }) {
 // ═══════════════════════════════════════════════════════════════
 //  DCA SIMULATOR
 // ═══════════════════════════════════════════════════════════════
-function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAmount, monthlyContribution, setMonthlyContribution, timeframe, setTimeframe }) {
+function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAmount, monthlyContribution, setMonthlyContribution, timeframe, setTimeframe, availableTimeframes }) {
     const dcaResult = useMemo(() => {
         if (!chartData || chartData.length === 0) return null;
 
@@ -1781,9 +1962,9 @@ function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAm
                         Compare Dollar Cost Averaging against investing the same total cash amount as a lump sum on Day 1.
                     </p>
                 </div>
-                {timeframe && setTimeframe && (
+                {timeframe && setTimeframe && availableTimeframes && (
                     <div className="timeframe-selector">
-                        {['1Y', '3Y', '5Y', '10Y'].map((tf) => (
+                        {availableTimeframes.map((tf) => (
                             <button
                                 key={tf}
                                 className={`timeframe-btn ${timeframe === tf ? 'active' : ''}`}
