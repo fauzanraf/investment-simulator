@@ -1098,7 +1098,7 @@ function ChartBrush({ data, customRange, setCustomRange }) {
                     Duration: <span style={{ color: 'var(--accent-blue)' }}>{durationText || '0 Months'}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
-                    {[1, 3, 5].map((y) => (
+                    {[1, 3, 5, 10].map((y) => (
                         <button
                             key={y}
                             onClick={() => handleShortcut(y)}
