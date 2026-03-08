@@ -208,6 +208,7 @@ export default function App() {
     const [timeframe, setTimeframe] = useState('Custom');
     const [customRange, setCustomRange] = useState([0, 100]);
     const [showStickyBar, setShowStickyBar] = useState(false);
+    const [showStandardMetrics, setShowStandardMetrics] = useState(false);
     const headerRef = useRef(null);
 
     const availableTimeframes = useMemo(() => {
@@ -439,6 +440,24 @@ export default function App() {
         );
     }
 
+    // Helper to get custom duration label
+    const customDurationLabel = useMemo(() => {
+        if (!historyData?.data?.length || timeframe !== 'Custom') return null;
+        const all = historyData.data;
+        const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
+        const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
+        const startDate = all[startIdx]?.date ? new Date(all[startIdx].date) : new Date();
+        const endDate = all[endIdx]?.date ? new Date(all[endIdx].date) : new Date();
+
+        const totalMonths = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth());
+        if (totalMonths >= 12) {
+            const years = Math.floor(totalMonths / 12);
+            const months = totalMonths % 12;
+            return `${years} Year${years > 1 ? 's' : ''}${months > 0 ? ` ${months} Month${months > 1 ? 's' : ''}` : ''}`;
+        }
+        return `${totalMonths} Month${totalMonths !== 1 ? 's' : ''}`;
+    }, [historyData, timeframe, customRange]);
+
     return (
         <div>
             {/* Navigation */}
@@ -521,9 +540,21 @@ export default function App() {
                 {stockInfo && (
                     <div className="page-header animate-fade-in" ref={headerRef}>
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                                 <h1 className="stock-title">{stockInfo.name || ticker}</h1>
                                 <span className="stock-ticker-badge">{stockInfo?.isMakmur ? 'Mutual Fund' : ticker}</span>
+                                {customDurationLabel && (
+                                    <span style={{
+                                        padding: '4px 10px',
+                                        border: '1px solid var(--accent-blue)',
+                                        color: 'var(--accent-blue)',
+                                        borderRadius: '12px',
+                                        fontSize: '0.8rem',
+                                        fontWeight: '600'
+                                    }}>
+                                        {customDurationLabel}
+                                    </span>
+                                )}
                             </div>
                             <p className="stock-meta">
                                 {stockInfo.sector && (
@@ -623,116 +654,160 @@ export default function App() {
 
                 {/* Returns */}
                 {metrics && (
-                    <div className="two-col animate-fade-in stagger-3">
-                        <div className="card">
-                            <div className="card-header">
-                                <div className="card-title">
-                                    <PieChart size={18} style={{ color: 'var(--accent-indigo)' }} />
-                                    Total Trailing Returns
+                    <>
+                        {timeframe === 'Custom' && (
+                            <div className="card animate-fade-in stagger-3" style={{ marginBottom: '24px', border: '1px solid var(--accent-blue)' }}>
+                                <div className="card-header" style={{ paddingBottom: '12px' }}>
+                                    <div className="card-title" style={{ color: 'var(--accent-blue)' }}>
+                                        <Activity size={18} />
+                                        Custom Selected Period Metrics ({customDurationLabel})
+                                    </div>
                                 </div>
-                                <p className="card-subtitle">
-                                    Absolute percentage change over each period, based on closing prices.
-                                </p>
-                            </div>
-                            <div className="card-body">
-                                <div className="metrics-grid">
-                                    <MetricItem label="YTD" value={metrics.trailing.ytd} />
-                                    <MetricItem label="1 Year" value={metrics.trailing['1y']} />
-                                    <MetricItem label="3 Years" value={metrics.trailing['3y']} />
-                                    <MetricItem label="5 Years" value={metrics.trailing['5y']} />
-                                    <MetricItem label="10 Years" value={metrics.trailing['10y']} />
-                                    {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.trailing['20y']} />}
-                                    {timeframe === 'Custom' && <MetricItem label="Custom" value={metrics.trailing.custom} />}
+                                <div className="card-body">
+                                    <div className="metrics-grid">
+                                        <MetricItem label="Total Return" value={metrics.trailing.custom} />
+                                        <MetricItem label="CAGR (Ann.)" value={metrics.cagr.custom} />
+                                        <MetricItem label="DCA Total Return" value={metrics.dcaTrailing.custom} />
+                                        <MetricItem label="DCA XIRR (Ann.)" value={metrics.dcaXirr.custom} />
+                                    </div>
                                 </div>
-                                {metrics.totalMonths < 120 - 2 && (
-                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 12, fontStyle: 'italic' }}>
-                                        Note: This ticker has ~{Math.round(metrics.totalMonths)} months of data. Periods exceeding available history are shown as "—".
-                                    </p>
-                                )}
                             </div>
+                        )}
+
+                        <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
+                            <button
+                                onClick={() => setShowStandardMetrics(!showStandardMetrics)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 16px',
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border-light)',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-primary)',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '500',
+                                    transition: 'all 0.2s',
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--text-muted)'}
+                                onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border-light)'}
+                            >
+                                {showStandardMetrics ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                {showStandardMetrics ? 'Hide Fixed Timeframe Metrics' : 'Show Fixed Timeframe Metrics (1Y, 3Y, 5Y, 10Y...)'}
+                            </button>
                         </div>
 
-                        <div className="card">
-                            <div className="card-header">
-                                <div className="card-title">
-                                    <TrendingUp size={18} style={{ color: 'var(--color-positive)' }} />
-                                    CAGR
-                                    <span className="info-tooltip-trigger">
-                                        <Info size={15} style={{ color: 'var(--text-muted)' }} />
-                                        <span className="info-tooltip-content">
-                                            Compound Annual Growth Rate — the smoothed, annualized average return over each time period.
-                                        </span>
-                                    </span>
+                        {showStandardMetrics && (
+                            <div className="two-col animate-fade-in">
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-title">
+                                            <PieChart size={18} style={{ color: 'var(--accent-indigo)' }} />
+                                            Total Trailing Returns
+                                        </div>
+                                        <p className="card-subtitle">
+                                            Absolute percentage change over each period, based on closing prices.
+                                        </p>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="metrics-grid">
+                                            <MetricItem label="YTD" value={metrics.trailing.ytd} />
+                                            <MetricItem label="1 Year" value={metrics.trailing['1y']} />
+                                            <MetricItem label="3 Years" value={metrics.trailing['3y']} />
+                                            <MetricItem label="5 Years" value={metrics.trailing['5y']} />
+                                            <MetricItem label="10 Years" value={metrics.trailing['10y']} />
+                                            {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.trailing['20y']} />}
+                                        </div>
+                                        {metrics.totalMonths < 120 - 2 && (
+                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 12, fontStyle: 'italic' }}>
+                                                Note: This ticker has ~{Math.round(metrics.totalMonths)} months of data. Periods exceeding available history are shown as "—".
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                                <p className="card-subtitle">Annualized average growth rate over each time period.</p>
-                            </div>
-                            <div className="card-body">
-                                <div className="metrics-grid">
-                                    <MetricItem label="YTD (Ann.)" value={metrics.cagr.ytd} />
-                                    <MetricItem label="1 Year" value={metrics.cagr['1y']} />
-                                    <MetricItem label="3 Years" value={metrics.cagr['3y']} />
-                                    <MetricItem label="5 Years" value={metrics.cagr['5y']} />
-                                    <MetricItem label="10 Years" value={metrics.cagr['10y']} />
-                                    {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.cagr['20y']} />}
-                                    {timeframe === 'Custom' && <MetricItem label="Custom" value={metrics.cagr.custom} />}
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="card">
-                            <div className="card-header">
-                                <div className="card-title">
-                                    <PieChart size={18} style={{ color: 'var(--accent-blue)' }} />
-                                    DCA Total Trailing Returns
-                                    <span className="info-tooltip-trigger">
-                                        <Info size={15} style={{ color: 'var(--text-muted)' }} />
-                                        <span className="info-tooltip-content">
-                                            Absolute percentage change over each period if you continually bought shares at the configured DCA settings.
-                                        </span>
-                                    </span>
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-title">
+                                            <TrendingUp size={18} style={{ color: 'var(--color-positive)' }} />
+                                            CAGR
+                                            <span className="info-tooltip-trigger">
+                                                <Info size={15} style={{ color: 'var(--text-muted)' }} />
+                                                <span className="info-tooltip-content">
+                                                    Compound Annual Growth Rate — the smoothed, annualized average return over each time period.
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <p className="card-subtitle">Annualized average growth rate over each time period.</p>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="metrics-grid">
+                                            <MetricItem label="YTD (Ann.)" value={metrics.cagr.ytd} />
+                                            <MetricItem label="1 Year" value={metrics.cagr['1y']} />
+                                            <MetricItem label="3 Years" value={metrics.cagr['3y']} />
+                                            <MetricItem label="5 Years" value={metrics.cagr['5y']} />
+                                            <MetricItem label="10 Years" value={metrics.cagr['10y']} />
+                                            {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.cagr['20y']} />}
+                                        </div>
+                                    </div>
                                 </div>
-                                <p className="card-subtitle">Total return percentage of Dollar Cost Averaging.</p>
-                            </div>
-                            <div className="card-body">
-                                <div className="metrics-grid">
-                                    <MetricItem label="YTD" value={metrics.dcaTrailing.ytd} />
-                                    <MetricItem label="1 Year" value={metrics.dcaTrailing['1y']} />
-                                    <MetricItem label="3 Years" value={metrics.dcaTrailing['3y']} />
-                                    <MetricItem label="5 Years" value={metrics.dcaTrailing['5y']} />
-                                    <MetricItem label="10 Years" value={metrics.dcaTrailing['10y']} />
-                                    {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.dcaTrailing['20y']} />}
-                                    {timeframe === 'Custom' && <MetricItem label="Custom" value={metrics.dcaTrailing.custom} />}
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="card">
-                            <div className="card-header">
-                                <div className="card-title">
-                                    <Calculator size={18} style={{ color: 'var(--accent-blue)' }} />
-                                    DCA XIRR
-                                    <span className="info-tooltip-trigger">
-                                        <Info size={15} style={{ color: 'var(--text-muted)' }} />
-                                        <span className="info-tooltip-content">
-                                            Return rate (XIRR) if you continually bought shares at the configured DCA settings below instead of a lumpsum.
-                                        </span>
-                                    </span>
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-title">
+                                            <PieChart size={18} style={{ color: 'var(--accent-blue)' }} />
+                                            DCA Total Trailing Returns
+                                            <span className="info-tooltip-trigger">
+                                                <Info size={15} style={{ color: 'var(--text-muted)' }} />
+                                                <span className="info-tooltip-content">
+                                                    Absolute percentage change over each period if you continually bought shares at the configured DCA settings.
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <p className="card-subtitle">Total return percentage of Dollar Cost Averaging.</p>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="metrics-grid">
+                                            <MetricItem label="YTD" value={metrics.dcaTrailing.ytd} />
+                                            <MetricItem label="1 Year" value={metrics.dcaTrailing['1y']} />
+                                            <MetricItem label="3 Years" value={metrics.dcaTrailing['3y']} />
+                                            <MetricItem label="5 Years" value={metrics.dcaTrailing['5y']} />
+                                            <MetricItem label="10 Years" value={metrics.dcaTrailing['10y']} />
+                                            {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.dcaTrailing['20y']} />}
+                                        </div>
+                                    </div>
                                 </div>
-                                <p className="card-subtitle">Annualized return of Dollar Cost Averaging.</p>
-                            </div>
-                            <div className="card-body">
-                                <div className="metrics-grid">
-                                    <MetricItem label="YTD (Ann.)" value={metrics.dcaXirr.ytd} />
-                                    <MetricItem label="1 Year" value={metrics.dcaXirr['1y']} />
-                                    <MetricItem label="3 Years" value={metrics.dcaXirr['3y']} />
-                                    <MetricItem label="5 Years" value={metrics.dcaXirr['5y']} />
-                                    <MetricItem label="10 Years" value={metrics.dcaXirr['10y']} />
-                                    {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.dcaXirr['20y']} />}
-                                    {timeframe === 'Custom' && <MetricItem label="Custom" value={metrics.dcaXirr.custom} />}
+
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="card-title">
+                                            <Calculator size={18} style={{ color: 'var(--accent-blue)' }} />
+                                            DCA XIRR
+                                            <span className="info-tooltip-trigger">
+                                                <Info size={15} style={{ color: 'var(--text-muted)' }} />
+                                                <span className="info-tooltip-content">
+                                                    Return rate (XIRR) if you continually bought shares at the configured DCA settings below instead of a lumpsum.
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <p className="card-subtitle">Annualized return of Dollar Cost Averaging.</p>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="metrics-grid">
+                                            <MetricItem label="YTD (Ann.)" value={metrics.dcaXirr.ytd} />
+                                            <MetricItem label="1 Year" value={metrics.dcaXirr['1y']} />
+                                            <MetricItem label="3 Years" value={metrics.dcaXirr['3y']} />
+                                            <MetricItem label="5 Years" value={metrics.dcaXirr['5y']} />
+                                            <MetricItem label="10 Years" value={metrics.dcaXirr['10y']} />
+                                            {!stockInfo?.isMakmur && <MetricItem label="20 Years" value={metrics.dcaXirr['20y']} />}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
+                        )}
+                    </>
                 )}
 
                 {/* Note about limited history data span */}
