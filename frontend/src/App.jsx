@@ -59,7 +59,52 @@ const calcReturn = (current, past) => {
 
 const calcCAGR = (current, past, years) => {
     if (!current || !past || past === 0 || years <= 0) return null;
-    return (Math.pow(current / past, 1 / years) - 1) * 100;
+    return (((current / past) ** (1 / years)) - 1) * 100;
+};
+
+const calcDCA = (all, monthsAgo, initialAmount, monthlyContribution) => {
+    if (!all || all.length === 0 || monthsAgo <= 0) return null;
+
+    const initAmt = Number(initialAmount) || 0;
+    const monthlyAmt = Number(monthlyContribution) || 0;
+
+    // We only simulate up to monthsAgo months of data
+    const startIndex = Math.max(0, all.length - 1 - monthsAgo);
+
+    // Check if we actually have data that far back (allow a 2 month tolerance)
+    if (monthsAgo > all.length + 2) return null;
+
+    let shares = 0;
+    let totalInvested = 0;
+    let actualMonths = 0;
+
+    for (let i = startIndex; i < all.length; i++) {
+        const price = all[i]?.adjClose || all[i]?.close;
+        if (!price) continue;
+        if (actualMonths === 0) {
+            shares += initAmt / price;
+            totalInvested += initAmt;
+        } else {
+            shares += monthlyAmt / price;
+            totalInvested += monthlyAmt;
+        }
+        actualMonths++;
+    }
+    const currentPrice = all[all.length - 1]?.adjClose || all[all.length - 1]?.close;
+    if (!currentPrice || actualMonths === 0) return null;
+    const portfolioValue = shares * currentPrice;
+
+    // Total Return %
+    const totalReturnPct = totalInvested > 0 ? ((portfolioValue - totalInvested) / totalInvested) * 100 : 0;
+
+    const years = actualMonths / 12;
+    if (years <= 0 || totalInvested <= 0) return null;
+    const cagr = ((portfolioValue / totalInvested) ** (1 / years)) - 1;
+
+    return {
+        cagr: cagr * 100,
+        trailing: totalReturnPct
+    };
 };
 
 // ── API Calls ──────────────────────────────────────────────────
@@ -116,6 +161,10 @@ export default function App() {
     const [timeframe, setTimeframe] = useState('10Y');
     const [showStickyBar, setShowStickyBar] = useState(false);
     const headerRef = useRef(null);
+
+    // DCA Configuration State
+    const [dcaInitialAmount, setDcaInitialAmount] = useState(1000);
+    const [dcaMonthlyContribution, setDcaMonthlyContribution] = useState(100);
 
     // Show sticky bar when the header scrolls out of view
     useEffect(() => {
@@ -191,7 +240,7 @@ export default function App() {
     const metrics = useMemo(() => {
         if (!historyData?.data?.length) return null;
         const all = historyData.data;
-        const current = all[all.length - 1]?.close;
+        const current = all[all.length - 1]?.adjClose || all[all.length - 1]?.close;
         if (!current) return null;
 
         // Calculate actual data span in months
@@ -207,14 +256,14 @@ export default function App() {
             if (monthsAgo > totalMonths + TOLERANCE) return null; // not enough data
             // Clamp to the first available data point if slightly out of range
             const idx = Math.max(0, all.length - 1 - monthsAgo);
-            return all[idx]?.close ?? null;
+            return all[idx]?.adjClose || all[idx]?.close || null;
         };
 
         // YTD: find start of current year
         const currentDate = new Date(all[all.length - 1].date);
         const currentYear = currentDate.getFullYear();
         const ytdStart = all.find((d) => new Date(d.date).getFullYear() === currentYear);
-        const ytdPrice = ytdStart?.close;
+        const ytdPrice = ytdStart?.adjClose || ytdStart?.close;
         const ytdMonths = currentDate.getMonth() + 1;
 
         const p1y = getPrice(12);
@@ -239,8 +288,22 @@ export default function App() {
                 '5y': calcCAGR(current, p5y, 5),
                 '10y': calcCAGR(current, p10y, 10),
             },
+            dcaCagr: {
+                ytd: calcDCA(all, ytdMonths, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
+                '1y': calcDCA(all, 12, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
+                '3y': calcDCA(all, 36, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
+                '5y': calcDCA(all, 60, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
+                '10y': calcDCA(all, 120, dcaInitialAmount, dcaMonthlyContribution)?.cagr,
+            },
+            dcaTrailing: {
+                ytd: calcDCA(all, ytdMonths, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
+                '1y': calcDCA(all, 12, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
+                '3y': calcDCA(all, 36, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
+                '5y': calcDCA(all, 60, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
+                '10y': calcDCA(all, 120, dcaInitialAmount, dcaMonthlyContribution)?.trailing,
+            }
         };
-    }, [historyData]);
+    }, [historyData, dcaInitialAmount, dcaMonthlyContribution]);
 
     if (loading) {
         return (
@@ -481,19 +544,81 @@ export default function App() {
                                     <MetricItem label="5 Years" value={metrics.cagr['5y']} />
                                     <MetricItem label="10 Years" value={metrics.cagr['10y']} />
                                 </div>
-                                {metrics.totalMonths < 120 - 2 && (
-                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 12, fontStyle: 'italic' }}>
-                                        Note: This ticker has ~{Math.round(metrics.totalMonths)} months of data. Periods exceeding available history are shown as "—".
-                                    </p>
-                                )}
+                            </div>
+                        </div>
+
+                        <div className="card">
+                            <div className="card-header">
+                                <div className="card-title">
+                                    <PieChart size={18} style={{ color: 'var(--accent-blue)' }} />
+                                    DCA Total Trailing Returns
+                                    <span className="info-tooltip-trigger">
+                                        <Info size={15} style={{ color: 'var(--text-muted)' }} />
+                                        <span className="info-tooltip-content">
+                                            Absolute percentage change over each period if you continually bought shares at the configured DCA settings.
+                                        </span>
+                                    </span>
+                                </div>
+                                <p className="card-subtitle">Total return percentage of Dollar Cost Averaging.</p>
+                            </div>
+                            <div className="card-body">
+                                <div className="metrics-grid">
+                                    <MetricItem label="YTD" value={metrics.dcaTrailing.ytd} />
+                                    <MetricItem label="1 Year" value={metrics.dcaTrailing['1y']} />
+                                    <MetricItem label="3 Years" value={metrics.dcaTrailing['3y']} />
+                                    <MetricItem label="5 Years" value={metrics.dcaTrailing['5y']} />
+                                    <MetricItem label="10 Years" value={metrics.dcaTrailing['10y']} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="card">
+                            <div className="card-header">
+                                <div className="card-title">
+                                    <Calculator size={18} style={{ color: 'var(--accent-blue)' }} />
+                                    DCA CAGR
+                                    <span className="info-tooltip-trigger">
+                                        <Info size={15} style={{ color: 'var(--text-muted)' }} />
+                                        <span className="info-tooltip-content">
+                                            Return rate if you continually bought shares at the configured DCA settings below instead of a lumpsum.
+                                        </span>
+                                    </span>
+                                </div>
+                                <p className="card-subtitle">Annualized return of Dollar Cost Averaging.</p>
+                            </div>
+                            <div className="card-body">
+                                <div className="metrics-grid">
+                                    <MetricItem label="YTD (Ann.)" value={metrics.dcaCagr.ytd} />
+                                    <MetricItem label="1 Year" value={metrics.dcaCagr['1y']} />
+                                    <MetricItem label="3 Years" value={metrics.dcaCagr['3y']} />
+                                    <MetricItem label="5 Years" value={metrics.dcaCagr['5y']} />
+                                    <MetricItem label="10 Years" value={metrics.dcaCagr['10y']} />
+                                </div>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* DCA Simulator */}
+                {/* Note about limited history data span */}
+                {metrics && metrics.totalMonths < 120 - 2 && (
+                    <div style={{ marginTop: '-12px', marginBottom: '24px', paddingLeft: '8px' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            Note: This ticker has ~{Math.round(metrics.totalMonths)} months of data. Periods exceeding available history are shown as "—".
+                        </p>
+                    </div>
+                )}
+
                 {chartData && chartData.length > 0 && (
-                    <DCASimulator chartData={chartData} currency={stockInfo?.currency} />
+                    <DCASimulator
+                        chartData={chartData}
+                        currency={stockInfo?.currency}
+                        initialAmount={dcaInitialAmount}
+                        setInitialAmount={setDcaInitialAmount}
+                        monthlyContribution={dcaMonthlyContribution}
+                        setMonthlyContribution={setDcaMonthlyContribution}
+                        timeframe={timeframe}
+                        setTimeframe={setTimeframe}
+                    />
                 )}
 
                 {/* ETF Holdings & Sector Weightings */}
@@ -1502,59 +1627,123 @@ function ETFSectorWeightingsSection({ sectors }) {
 // ═══════════════════════════════════════════════════════════════
 //  DCA SIMULATOR
 // ═══════════════════════════════════════════════════════════════
-function DCASimulator({ chartData, currency = 'USD' }) {
-    const [initialAmount, setInitialAmount] = useState(1000);
-    const [monthlyContribution, setMonthlyContribution] = useState(100);
-
+function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAmount, monthlyContribution, setMonthlyContribution, timeframe, setTimeframe }) {
     const dcaResult = useMemo(() => {
         if (!chartData || chartData.length === 0) return null;
 
         let shares = 0;
         let totalInvested = 0;
+        const chartPoints = [];
 
-        // Iterate through chartData (which represents chronological price history)
+        const initAmt = Number(initialAmount) || 0;
+        const monthlyAmt = Number(monthlyContribution) || 0;
+
+        const getPrice = (d) => d?.adjClose || d?.close;
+
+        let totalMonths = 0;
         for (let i = 0; i < chartData.length; i++) {
-            const price = chartData[i].close;
-            if (!price) continue;
-
-            if (i === 0) {
-                // Initial investment on the first available date
-                shares += initialAmount / price;
-                totalInvested += initialAmount;
-            } else {
-                // Monthly contribution for subsequent dates
-                shares += monthlyContribution / price;
-                totalInvested += monthlyContribution;
-            }
+            if (getPrice(chartData[i])) totalMonths++;
         }
 
-        const currentPrice = chartData[chartData.length - 1].close;
+        const finalTotalInvested = initAmt + Math.max(0, totalMonths - 1) * monthlyAmt;
+        const startPrice = getPrice(chartData.find(d => getPrice(d)));
+        const lumpsumShares = startPrice ? finalTotalInvested / startPrice : 0;
+
+        let actualMonths = 0;
+        for (let i = 0; i < chartData.length; i++) {
+            const price = getPrice(chartData[i]);
+            if (!price) continue;
+
+            if (actualMonths === 0) {
+                shares += initAmt / price;
+                totalInvested += initAmt;
+            } else {
+                shares += monthlyAmt / price;
+                totalInvested += monthlyAmt;
+            }
+            actualMonths++;
+
+            chartPoints.push({
+                date: chartData[i].date,
+                dcaValue: shares * price,
+                lumpsumValue: lumpsumShares * price,
+                invested: totalInvested,
+            });
+        }
+
+        const currentPrice = getPrice(chartData[chartData.length - 1]);
         const portfolioValue = shares * currentPrice;
         const totalReturn = portfolioValue - totalInvested;
         const returnPct = totalInvested > 0 ? (totalReturn / totalInvested) * 100 : 0;
+
+        const lumpsumValue = lumpsumShares * currentPrice;
 
         return {
             totalInvested,
             portfolioValue,
             totalReturn,
-            returnPct
+            returnPct,
+            lumpsumValue,
+            finalTotalInvested,
+            chartPoints
         };
     }, [chartData, initialAmount, monthlyContribution]);
+
+    const [hoveredIdx, setHoveredIdx] = useState(null);
 
     if (!dcaResult) return null;
 
     const isPositive = dcaResult.totalReturn >= 0;
+    const { chartPoints } = dcaResult;
+
+    // --- Chart SVG Config ---
+    const W = 900;
+    const H = 260;
+    const PAD_LEFT = 60;
+    const PAD_RIGHT = 30;
+    const PAD_TOP = 20;
+    const PAD_BOTTOM = 20;
+    const chartW = W - PAD_LEFT - PAD_RIGHT;
+    const chartH = H - PAD_TOP - PAD_BOTTOM;
+
+    const maxVal = Math.max(...chartPoints.map(p => Math.max(p.dcaValue, p.lumpsumValue, p.invested)), dcaResult.finalTotalInvested, 1);
+    const yTicks = [0, maxVal * 0.25, maxVal * 0.5, maxVal * 0.75, maxVal];
+
+    const getX = (i) => PAD_LEFT + (i / Math.max(1, chartPoints.length - 1)) * chartW;
+    const getY = (v) => PAD_TOP + chartH - (v / maxVal) * chartH;
+
+    const dcaPath = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p.dcaValue)}`).join(' ');
+    const lumpPath = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p.lumpsumValue)}`).join(' ');
+    const invPath = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p.invested)}`).join(' ');
+    const constLumpInvPath = `M ${PAD_LEFT} ${getY(dcaResult.finalTotalInvested)} L ${W - PAD_RIGHT} ${getY(dcaResult.finalTotalInvested)}`;
+
+    const hPoint = hoveredIdx != null ? chartPoints[hoveredIdx] : null;
 
     return (
         <div className="card animate-fade-in stagger-4">
-            <div className="card-header">
-                <div className="card-title">
-                    <Calculator size={18} style={{ color: 'var(--accent-indigo)' }} />
-                    DCA Simulator
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                    <div className="card-title">
+                        <Calculator size={18} style={{ color: 'var(--accent-indigo)' }} />
+                        DCA Simulator vs Lumpsum
+                    </div>
+                    <p className="card-subtitle">
+                        Compare Dollar Cost Averaging against investing the same total cash amount as a lump sum on Day 1.
+                    </p>
                 </div>
-                <p className="card-subtitle">
-                    Dollar Cost Averaging: See how your portfolio would have grown based on the selected timeframe.
-                </p>
+                {timeframe && setTimeframe && (
+                    <div className="timeframe-selector">
+                        {['1Y', '3Y', '5Y', '10Y'].map((tf) => (
+                            <button
+                                key={tf}
+                                className={`timeframe-btn ${timeframe === tf ? 'active' : ''}`}
+                                onClick={() => setTimeframe(tf)}
+                            >
+                                {tf}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
             <div className="card-body">
                 <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', flexWrap: 'wrap' }}>
@@ -1563,12 +1752,15 @@ function DCASimulator({ chartData, currency = 'USD' }) {
                             Initial Amount ({getCurrencySymbol(currency)})
                         </label>
                         <input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             className="search-input"
                             style={{ width: '100%', padding: '10px' }}
-                            value={initialAmount}
-                            onChange={(e) => setInitialAmount(Number(e.target.value) || 0)}
-                            min="0"
+                            value={initialAmount === '' ? '' : new Intl.NumberFormat('id-ID').format(initialAmount)}
+                            onChange={(e) => {
+                                const raw = e.target.value.replace(/\D/g, '');
+                                setInitialAmount(raw === '' ? '' : Number(raw));
+                            }}
                         />
                     </div>
                     <div style={{ flex: 1, minWidth: '200px' }}>
@@ -1576,39 +1768,121 @@ function DCASimulator({ chartData, currency = 'USD' }) {
                             Planned Monthly Savings ({getCurrencySymbol(currency)})
                         </label>
                         <input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             className="search-input"
                             style={{ width: '100%', padding: '10px' }}
-                            value={monthlyContribution}
-                            onChange={(e) => setMonthlyContribution(Number(e.target.value) || 0)}
-                            min="0"
+                            value={monthlyContribution === '' ? '' : new Intl.NumberFormat('id-ID').format(monthlyContribution)}
+                            onChange={(e) => {
+                                const raw = e.target.value.replace(/\D/g, '');
+                                setMonthlyContribution(raw === '' ? '' : Number(raw));
+                            }}
                         />
                     </div>
                 </div>
 
-                <div className="metrics-grid">
+                <div className="metrics-grid" style={{ marginBottom: '24px' }}>
                     <div className="metric-item">
                         <div className="metric-label">Total Invested</div>
                         <div className="metric-value">{formatCurrency(dcaResult.totalInvested, currency)}</div>
                     </div>
                     <div className="metric-item">
-                        <div className="metric-label">Portfolio Value</div>
+                        <div className="metric-label">DCA Value</div>
                         <div className="metric-value">{formatCurrency(dcaResult.portfolioValue, currency)}</div>
                     </div>
                     <div className="metric-item">
-                        <div className="metric-label">Total Return</div>
-                        <div className={`metric-value ${isPositive ? 'positive' : 'negative'}`}>
-                            {isPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                            {formatCurrency(dcaResult.totalReturn, currency)}
-                        </div>
+                        <div className="metric-label">Lumpsum Value</div>
+                        <div className="metric-value">{formatCurrency(dcaResult.lumpsumValue, currency)}</div>
                     </div>
                     <div className="metric-item">
-                        <div className="metric-label">Return %</div>
+                        <div className="metric-label">DCA Return %</div>
                         <div className={`metric-value ${isPositive ? 'positive' : 'negative'}`}>
                             {isPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
                             {formatPercent(dcaResult.returnPct)}
                         </div>
                     </div>
+                </div>
+
+                {/* SVG Chart */}
+                <div className="rvp-svg-wrapper" onMouseLeave={() => setHoveredIdx(null)}>
+                    <svg viewBox={`0 0 ${W} ${H}`} className="rvp-svg" onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const rawX = e.clientX - rect.left;
+                        const scaleX = W / rect.width;
+                        const x = rawX * scaleX;
+                        if (x < PAD_LEFT || x > W - PAD_RIGHT) return;
+                        const pct = (x - PAD_LEFT) / chartW;
+                        const idx = Math.min(Math.floor(pct * chartPoints.length), chartPoints.length - 1);
+                        setHoveredIdx(idx);
+                    }}>
+                        {/* Grid lines */}
+                        {yTicks.map((t, i) => {
+                            const y = getY(t);
+                            return (
+                                <React.Fragment key={i}>
+                                    <line x1={PAD_LEFT} y1={y} x2={W - PAD_RIGHT} y2={y} stroke="#f1f5f9" strokeWidth="1" />
+                                    <text x={PAD_LEFT - 8} y={y} dy="4" textAnchor="end" fill="#94a3b8" fontSize="10" fontFamily="var(--font-mono)">
+                                        {formatLargeNumber(t, currency)}
+                                    </text>
+                                </React.Fragment>
+                            );
+                        })}
+
+                        {/* Chart Lines */}
+                        {/* Lumpsum */}
+                        <path d={lumpPath} fill="none" stroke="#cbd5e1" strokeWidth="2" strokeDasharray="4 4" />
+                        {/* Constant Lumpsum Invested */}
+                        <path d={constLumpInvPath} fill="none" stroke="#f87171" strokeWidth="2" strokeDasharray="4 4" />
+                        {/* Invested */}
+                        <path d={invPath} fill="none" stroke="#94a3b8" strokeWidth="2" />
+                        {/* DCA Value */}
+                        <path d={dcaPath} fill="none" stroke="var(--accent-blue)" strokeWidth="2.5" />
+
+                        {/* Hover Overlay */}
+                        {hPoint && hoveredIdx !== null && (
+                            <g>
+                                <line x1={getX(hoveredIdx)} y1={PAD_TOP} x2={getX(hoveredIdx)} y2={H - PAD_BOTTOM} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 4" />
+                                <circle cx={getX(hoveredIdx)} cy={getY(hPoint.dcaValue)} r="4" fill="white" stroke="var(--accent-blue)" strokeWidth="2" />
+                                <circle cx={getX(hoveredIdx)} cy={getY(hPoint.lumpsumValue)} r="4" fill="white" stroke="#cbd5e1" strokeWidth="2" />
+                                <circle cx={getX(hoveredIdx)} cy={getY(hPoint.invested)} r="4" fill="white" stroke="#94a3b8" strokeWidth="2" />
+                            </g>
+                        )}
+                    </svg>
+
+                    {/* Legend */}
+                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '12px', height: '3px', background: 'var(--accent-blue)' }}></div>
+                            DCA Value
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '12px', height: '3px', borderTop: '2px dashed #cbd5e1' }}></div>
+                            Lumpsum Value
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '12px', height: '3px', background: '#94a3b8' }}></div>
+                            Total Invested (DCA)
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '12px', height: '3px', borderTop: '2px dashed #f87171' }}></div>
+                            Total Invested (Lumpsum)
+                        </div>
+                    </div>
+
+                    {/* Tooltip */}
+                    {hPoint && (
+                        <div className="chart-tooltip" style={{
+                            left: `${(getX(hoveredIdx) / W) * 100}%`,
+                            top: `20%`,
+                            marginLeft: getX(hoveredIdx) > W * 0.7 ? '-160px' : '20px'
+                        }}>
+                            <div className="chart-tooltip-label">{new Date(hPoint.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
+                            <div className="chart-tooltip-value" style={{ color: 'var(--accent-blue)' }}>DCA: {formatCurrency(hPoint.dcaValue, currency)}</div>
+                            <div className="chart-tooltip-value" style={{ color: '#94a3b8' }}>Lumpsum: {formatCurrency(hPoint.lumpsumValue, currency)}</div>
+                            <div className="chart-tooltip-value" style={{ color: '#64748b', fontSize: '11px', marginTop: '4px' }}>Invested (DCA): {formatCurrency(hPoint.invested, currency)}</div>
+                            <div className="chart-tooltip-value" style={{ color: '#f87171', fontSize: '11px', marginTop: '2px' }}>Invested (Lumpsum): {formatCurrency(dcaResult.finalTotalInvested, currency)}</div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -70,7 +70,8 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
             open: safeVal(row.open),
             high: safeVal(row.high),
             low: safeVal(row.low),
-            close: safeVal(row.close), // historical is adjusted close by default in yf2
+            close: safeVal(row.close),
+            adjClose: safeVal(row.adjClose),
             volume: safeVal(row.volume),
         }));
 
