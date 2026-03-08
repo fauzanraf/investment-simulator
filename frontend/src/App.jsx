@@ -9,6 +9,7 @@ import {
     Search,
     Activity,
     ChevronDown,
+    ChevronUp,
     Globe,
     BarChart3,
     Wallet,
@@ -504,9 +505,21 @@ export default function App() {
             {stockInfo && (
                 <div className={`sticky-ticker-bar ${showStickyBar ? 'visible' : ''}`}>
                     <div className="container sticky-ticker-inner">
-                        <div className="sticky-ticker-left">
+                        <div className="sticky-ticker-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span className="sticky-ticker-name">{stockInfo.name || ticker}</span>
                             <span className="sticky-ticker-badge">{stockInfo?.isMakmur ? 'Mutual Fund' : ticker}</span>
+                            {customDurationLabel && (
+                                <span style={{
+                                    padding: '2px 8px',
+                                    border: '1px solid var(--accent-blue)',
+                                    color: 'var(--accent-blue)',
+                                    borderRadius: '12px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '600'
+                                }}>
+                                    {customDurationLabel}
+                                </span>
+                            )}
                         </div>
                         <div className="sticky-ticker-right">
                             <span className="sticky-ticker-price">
