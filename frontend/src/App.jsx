@@ -1046,6 +1046,29 @@ function PriceChart({ data, hoveredPoint, setHoveredPoint, currency = 'USD' }) {
                         <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="5" fill="white" stroke={strokeColor} strokeWidth="2.5" />
                     </g>
                 )}
+
+                {/* Start and End labels */}
+                {data.length > 1 && (
+                    <g style={{ pointerEvents: 'none' }}>
+                        {/* Start Label */}
+                        <g transform={`translate(${getX(0)}, ${getY(firstClose)})`}>
+                            <rect x="-45" y="-22" width="40" height="18" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                            <text x="-25" y="-9" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-muted)">
+                                {formatCurrency(firstClose, currency)}
+                            </text>
+                            <circle r="3" fill="var(--bg-primary)" stroke={strokeColor} strokeWidth="1.5" />
+                        </g>
+
+                        {/* End Label */}
+                        <g transform={`translate(${getX(data.length - 1)}, ${getY(lastClose)})`}>
+                            <rect x="5" y="-22" width="40" height="18" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                            <text x="25" y="-9" textAnchor="middle" fontSize="10" fontWeight="700" fill={strokeColor}>
+                                {formatCurrency(lastClose, currency)}
+                            </text>
+                            <circle r="3" fill="var(--bg-primary)" stroke={strokeColor} strokeWidth="1.5" />
+                        </g>
+                    </g>
+                )}
             </svg>
 
             {/* Tooltip */}
@@ -2235,6 +2258,38 @@ function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAm
                                 <circle cx={getX(hoveredIdx)} cy={getY(hPoint.dcaValue)} r="4" fill="white" stroke="var(--accent-blue)" strokeWidth="2" />
                                 <circle cx={getX(hoveredIdx)} cy={getY(hPoint.lumpsumValue)} r="4" fill="white" stroke="#cbd5e1" strokeWidth="2" />
                                 <circle cx={getX(hoveredIdx)} cy={getY(hPoint.invested)} r="4" fill="white" stroke="#94a3b8" strokeWidth="2" />
+                            </g>
+                        )}
+
+                        {/* Start and End labels */}
+                        {chartPoints.length > 1 && (
+                            <g style={{ pointerEvents: 'none' }}>
+                                {/* Start Point (All start at the same invested amount) */}
+                                <g transform={`translate(${getX(0)}, ${getY(chartPoints[0].dcaValue)})`}>
+                                    <rect x="-65" y="-12" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                                    <text x="-35" y="4" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-muted)">
+                                        {formatLargeNumber(chartPoints[0].dcaValue, currency)}
+                                    </text>
+                                    <circle r="3" fill="white" stroke="var(--accent-blue)" strokeWidth="1.5" />
+                                </g>
+
+                                {/* End Point - DCA */}
+                                <g transform={`translate(${getX(chartPoints.length - 1)}, ${getY(dcaResult.portfolioValue)})`}>
+                                    <rect x="5" y="-28" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                                    <text x="35" y="-12" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent-blue)">
+                                        {formatLargeNumber(dcaResult.portfolioValue, currency)}
+                                    </text>
+                                    <circle r="4" fill="white" stroke="var(--accent-blue)" strokeWidth="2" />
+                                </g>
+
+                                {/* End Point - Lumpsum */}
+                                <g transform={`translate(${getX(chartPoints.length - 1)}, ${getY(dcaResult.lumpsumValue)})`}>
+                                    <rect x="5" y="4" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                                    <text x="35" y="20" textAnchor="middle" fontSize="11" fontWeight="700" fill="#64748b">
+                                        {formatLargeNumber(dcaResult.lumpsumValue, currency)}
+                                    </text>
+                                    <circle r="4" fill="white" stroke="#cbd5e1" strokeWidth="2" />
+                                </g>
                             </g>
                         )}
                     </svg>
