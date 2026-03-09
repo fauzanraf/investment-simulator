@@ -206,24 +206,8 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [hoveredPoint, setHoveredPoint] = useState(null);
-    const [timeframe, setTimeframe] = useState('Custom');
     const [customRange, setCustomRange] = useState([0, 100]);
     const [showStickyBar, setShowStickyBar] = useState(false);
-    const [showStandardMetrics, setShowStandardMetrics] = useState(false);
-    const [showKeyStatistics, setShowKeyStatistics] = useState(false);
-    const headerRef = useRef(null);
-
-    const availableTimeframes = useMemo(() => {
-        if (stockInfo?.isMakmur) return ['1Y', '3Y', '5Y', 'Custom'];
-        return ['1Y', '3Y', '5Y', '10Y', '20Y', 'Max', 'Custom'];
-    }, [stockInfo]);
-
-    // Force timeframe to valid state when changing ticker
-    useEffect(() => {
-        if (stockInfo && !availableTimeframes.includes(timeframe)) {
-            setTimeframe('5Y');
-        }
-    }, [stockInfo, availableTimeframes, timeframe]);
 
     // DCA Configuration State
     const [dcaInitialAmount, setDcaInitialAmount] = useState(1000);
@@ -318,15 +302,10 @@ export default function App() {
     const chartData = useMemo(() => {
         if (!historyData?.data?.length) return [];
         const all = historyData.data;
-        if (timeframe === 'Custom') {
-            const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
-            const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
-            return all.slice(startIdx, endIdx + 1);
-        }
-        const tfMonths = { '1Y': 12, '3Y': 36, '5Y': 60, '10Y': 120, '20Y': 240 };
-        const months = tfMonths[timeframe] || all.length;
-        return all.slice(Math.max(all.length - months, 0));
-    }, [historyData, timeframe, customRange]);
+        const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
+        const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
+        return all.slice(startIdx, endIdx + 1);
+    }, [historyData, customRange]);
 
     // Calculate returns — only show periods that have enough data
     const metrics = useMemo(() => {
@@ -369,26 +348,25 @@ export default function App() {
         let customCagr = null;
         let customDcaXirr = null;
         let customDcaTrailing = null;
-        if (timeframe === 'Custom') {
-            const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
-            const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
-            const customStart = all[startIdx];
-            const customEnd = all[endIdx];
-            if (customStart && customEnd) {
-                const sPrice = customStart.adjClose || customStart.close;
-                const ePrice = customEnd.adjClose || customEnd.close;
-                customTrailing = calcReturn(ePrice, sPrice);
-                const sDate = new Date(customStart.date);
-                const eDate = new Date(customEnd.date);
-                const customYears = ((eDate - sDate) / (1000 * 60 * 60 * 24)) / 365;
-                customCagr = calcCAGR(ePrice, sPrice, customYears);
 
-                const customMonths = Math.round(customYears * 12);
-                const customSlice = all.slice(0, endIdx + 1);
-                const dcaRes = calcDCA(customSlice, customMonths, dcaInitialAmount, dcaMonthlyContribution);
-                customDcaXirr = dcaRes?.xirr;
-                customDcaTrailing = dcaRes?.trailing;
-            }
+        const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
+        const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
+        const customStart = all[startIdx];
+        const customEnd = all[endIdx];
+        if (customStart && customEnd) {
+            const sPrice = customStart.adjClose || customStart.close;
+            const ePrice = customEnd.adjClose || customEnd.close;
+            customTrailing = calcReturn(ePrice, sPrice);
+            const sDate = new Date(customStart.date);
+            const eDate = new Date(customEnd.date);
+            const customYears = ((eDate - sDate) / (1000 * 60 * 60 * 24)) / 365;
+            customCagr = calcCAGR(ePrice, sPrice, customYears);
+
+            const customMonths = Math.round(customYears * 12);
+            const customSlice = all.slice(0, endIdx + 1);
+            const dcaRes = calcDCA(customSlice, customMonths, dcaInitialAmount, dcaMonthlyContribution);
+            customDcaXirr = dcaRes?.xirr;
+            customDcaTrailing = dcaRes?.trailing;
         }
 
         return {
@@ -435,7 +413,7 @@ export default function App() {
 
     // Helper to get custom duration label
     const { full: customDurationLabel, short: customDurationLabelShort } = useMemo(() => {
-        if (!historyData?.data?.length || timeframe !== 'Custom') return { full: null, short: null };
+        if (!historyData?.data?.length) return { full: null, short: null };
         const all = historyData.data;
         const startIdx = Math.floor((customRange[0] / 100) * (all.length - 1));
         const endIdx = Math.ceil((customRange[1] / 100) * (all.length - 1));
@@ -662,21 +640,11 @@ export default function App() {
                                 <BarChart3 size={18} style={{ color: 'var(--accent-blue)' }} />
                                 Price History
                             </div>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                {availableTimeframes.map((tf) => (
-                                    <button
-                                        key={tf}
-                                        className={`timeframe-btn ${timeframe === tf ? 'active' : ''}`}
-                                        onClick={() => setTimeframe(tf)}
-                                    >
-                                        {tf}
-                                    </button>
-                                ))}
-                            </div>
+
                         </div>
                         <div className="card-body">
                             <PriceChart data={chartData} hoveredPoint={hoveredPoint} setHoveredPoint={setHoveredPoint} currency={stockInfo?.currency} />
-                            {timeframe === 'Custom' && historyData?.data && (
+                            {historyData?.data && (
                                 <ChartBrush data={historyData.data} customRange={customRange} setCustomRange={setCustomRange} />
                             )}
                         </div>
@@ -686,24 +654,22 @@ export default function App() {
                 {/* Returns */}
                 {metrics && (
                     <>
-                        {timeframe === 'Custom' && (
-                            <div className="card animate-fade-in stagger-3" style={{ marginBottom: '24px', border: '1px solid var(--accent-blue)' }}>
-                                <div className="card-header" style={{ paddingBottom: '12px' }}>
-                                    <div className="card-title" style={{ color: 'var(--accent-blue)' }}>
-                                        <Activity size={18} />
-                                        Custom Selected Period Metrics ({customDurationLabel})
-                                    </div>
-                                </div>
-                                <div className="card-body">
-                                    <div className="metrics-grid">
-                                        <MetricItem label="Total Return" value={metrics.trailing.custom} />
-                                        <MetricItem label="CAGR (Ann.)" value={metrics.cagr.custom} />
-                                        <MetricItem label="DCA Total Return" value={metrics.dcaTrailing.custom} />
-                                        <MetricItem label="DCA XIRR (Ann.)" value={metrics.dcaXirr.custom} />
-                                    </div>
+                        <div className="card animate-fade-in stagger-3" style={{ marginBottom: '24px', border: '1px solid var(--accent-blue)' }}>
+                            <div className="card-header" style={{ paddingBottom: '12px' }}>
+                                <div className="card-title" style={{ color: 'var(--accent-blue)' }}>
+                                    <Activity size={18} />
+                                    Custom Selected Period Metrics ({customDurationLabel})
                                 </div>
                             </div>
-                        )}
+                            <div className="card-body">
+                                <div className="metrics-grid">
+                                    <MetricItem label="Total Return" value={metrics.trailing.custom} />
+                                    <MetricItem label="CAGR (Ann.)" value={metrics.cagr.custom} />
+                                    <MetricItem label="DCA Total Return" value={metrics.dcaTrailing.custom} />
+                                    <MetricItem label="DCA XIRR (Ann.)" value={metrics.dcaXirr.custom} />
+                                </div>
+                            </div>
+                        </div>
 
                         <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
                             <button
@@ -858,9 +824,6 @@ export default function App() {
                         setInitialAmount={setDcaInitialAmount}
                         monthlyContribution={dcaMonthlyContribution}
                         setMonthlyContribution={setDcaMonthlyContribution}
-                        timeframe={timeframe}
-                        setTimeframe={setTimeframe}
-                        availableTimeframes={availableTimeframes}
                     />
                 )}
 
@@ -2064,7 +2027,7 @@ function ETFSectorWeightingsSection({ sectors }) {
 // ═══════════════════════════════════════════════════════════════
 //  DCA SIMULATOR
 // ═══════════════════════════════════════════════════════════════
-function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAmount, monthlyContribution, setMonthlyContribution, timeframe, setTimeframe, availableTimeframes }) {
+function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAmount, monthlyContribution, setMonthlyContribution }) {
     const dcaResult = useMemo(() => {
         if (!chartData || chartData.length === 0) return null;
 
@@ -2168,19 +2131,7 @@ function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAm
                         Compare Dollar Cost Averaging against investing the same total cash amount as a lump sum on Day 1.
                     </p>
                 </div>
-                {timeframe && setTimeframe && availableTimeframes && (
-                    <div className="timeframe-selector">
-                        {availableTimeframes.map((tf) => (
-                            <button
-                                key={tf}
-                                className={`timeframe-btn ${timeframe === tf ? 'active' : ''}`}
-                                onClick={() => setTimeframe(tf)}
-                            >
-                                {tf}
-                            </button>
-                        ))}
-                    </div>
-                )}
+
             </div>
             <div className="card-body">
                 <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', flexWrap: 'wrap' }}>
