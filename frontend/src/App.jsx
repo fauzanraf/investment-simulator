@@ -968,35 +968,9 @@ function SearchBar({ onSelect }) {
                                     setResults([]);
                                 }}
                             >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span className="search-symbol">{r.symbol}</span>
-                                        {r.isMakmur && (
-                                            <span style={{
-                                                fontSize: '0.65rem',
-                                                padding: '2px 6px',
-                                                background: 'var(--accent-indigo)',
-                                                color: 'white',
-                                                borderRadius: '4px',
-                                                fontWeight: 'bold',
-                                                letterSpacing: '0.05em'
-                                            }}>MAKMUR.ID</span>
-                                        )}
-                                        {r.isTradingView && (
-                                            <span style={{
-                                                fontSize: '0.65rem',
-                                                padding: '2px 6px',
-                                                background: '#2962FF', // TradingView brand color
-                                                color: 'white',
-                                                borderRadius: '4px',
-                                                fontWeight: 'bold',
-                                                letterSpacing: '0.05em'
-                                            }}>TRADINGVIEW</span>
-                                        )}
-                                    </div>
-                                    <span className="search-name">{r.name}</span>
-                                </div>
-                                <span className="search-type">{r.type || 'UNKNOWN'}</span>
+                                <span className="search-item-symbol">{r.isMakmur ? '🏦 ' : ''}{r.isTradingView ? '📈 ' : ''}{r.isMakmur ? r.name?.substring(0, 20) : r.symbol}</span>
+                                <span className="search-item-name">{r.name}</span>
+                                <span className="search-item-type">{r.isMakmur ? 'Mutual Fund' : r.isTradingView ? 'TradingView' : r.type || 'UNKNOWN'}</span>
                             </div>
                         ))
                     ) : (
