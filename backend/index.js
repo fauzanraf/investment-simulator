@@ -249,7 +249,7 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
 
         // Map python yfinance periods to JS dates
         const periodMap = {
-            '1y': 1, '3y': 3, '5y': 5, '10y': 10, '20y': 20, 'max': 50
+            '1y': 1, '3y': 3, '5y': 5, '10y': 10, '20y': 20, 'max': 120
         };
         const years = periodMap[period.toLowerCase()] || 20;
         const period1 = new Date();

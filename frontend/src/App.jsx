@@ -165,7 +165,7 @@ const api = {
         if (!res.ok) throw new Error('Search failed');
         return res.json();
     },
-    history: async (ticker, period = '20y', interval = '1mo') => {
+    history: async (ticker, period = 'max', interval = '1mo') => {
         const res = await fetch(`${API_BASE}/api/stock/${ticker}/history?period=${period}&interval=${interval}`);
         if (!res.ok) throw new Error(`History failed for ${ticker}`);
         return res.json();
