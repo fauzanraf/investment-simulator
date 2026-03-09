@@ -892,89 +892,118 @@ export default function App() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  SEARCH BAR
+//  SEARCH COMPONENT
 // ═══════════════════════════════════════════════════════════════
 function SearchBar({ onSelect }) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
-    const [open, setOpen] = useState(false);
-    const [searchLoading, setSearchLoading] = useState(false);
-    const timerRef = useRef(null);
-    const containerRef = useRef(null);
+    const [isOpen, setIsOpen] = useState(false);
+    const [searching, setSearching] = useState(false);
+    const searchRef = useRef(null);
+    const timeoutRef = useRef(null);
 
-    // Click outside to close
+    // Close on click outside
     useEffect(() => {
-        const handler = (e) => {
-            if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+        const handleClickOutside = (e) => {
+            if (searchRef.current && !searchRef.current.contains(e.target)) {
+                setIsOpen(false);
+            }
         };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const handleChange = (e) => {
-        const val = e.target.value;
+    const handleSearch = (val) => {
         setQuery(val);
-        clearTimeout(timerRef.current);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-        if (val.trim().length < 1) {
+        if (!val.trim()) {
             setResults([]);
-            setOpen(false);
+            setIsOpen(false);
             return;
         }
 
-        setSearchLoading(true);
-        timerRef.current = setTimeout(async () => {
+        setSearching(true);
+        setIsOpen(true);
+        timeoutRef.current = setTimeout(async () => {
             try {
-                const data = await api.search(val.trim());
-                setResults(data);
-                setOpen(data.length > 0);
-            } catch {
+                const res = await api.search(val);
+                setResults(res.slice(0, 8)); // Top 8 combined
+            } catch (err) {
+                console.error(err);
                 setResults([]);
             } finally {
-                setSearchLoading(false);
+                setSearching(false);
             }
-        }, 300);
-    };
-
-    const handleSelect = (symbol) => {
-        setQuery('');
-        setOpen(false);
-        setResults([]);
-        onSelect(symbol);
-    };
-
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && query.trim()) {
-            handleSelect(query.trim().toUpperCase());
-        }
+        }, 500); // Debounce 500ms
     };
 
     return (
-        <div className="search-container" ref={containerRef} style={{ display: 'block' }}>
-            <div className="search-input-wrapper">
-                <Search size={16} className="search-icon" />
-                <input
-                    id="ticker-search"
-                    className="search-input"
-                    type="text"
-                    placeholder="Search ticker or mutual fund (e.g. AAPL, Sucorinvest)..."
-                    value={query}
-                    onChange={handleChange}
-                    onKeyDown={handleKeyDown}
-                    onFocus={() => results.length > 0 && setOpen(true)}
-                    autoComplete="off"
-                />
-            </div>
-
-            {open && results.length > 0 && (
+        <div className="search-container" ref={searchRef}>
+            <Search size={18} className="search-icon" />
+            <input
+                type="text"
+                className="search-input"
+                placeholder="Search ticker, mutual fund, or commodity (e.g. AAPL, Sucor, Gold)..."
+                value={query}
+                onChange={(e) => handleSearch(e.target.value)}
+                onFocus={() => { if (query) setIsOpen(true); }}
+            />
+            {isOpen && (
                 <div className="search-dropdown">
-                    {results.map((r, i) => (
-                        <div key={`${r.symbol}-${i}`} className="search-item" onClick={() => handleSelect(r.symbol)}>
-                            <span className="search-item-symbol">{r.isMakmur ? '🏦' : ''} {r.isMakmur ? r.name?.substring(0, 20) : r.symbol}</span>
-                            <span className="search-item-name">{r.isMakmur ? r.name : r.name}</span>
-                            <span className="search-item-type">{r.isMakmur ? 'Mutual Fund' : r.type}</span>
+                    {searching ? (
+                        <div className="search-item" style={{ justifyContent: 'center', pointerEvents: 'none' }}>
+                            <div className="spinner" style={{ width: 16, height: 16, borderTopColor: 'var(--accent-blue)' }} />
+                            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Searching...</span>
                         </div>
-                    ))}
+                    ) : results.length > 0 ? (
+                        results.map((r, i) => (
+                            <div
+                                key={i}
+                                className="search-item"
+                                onClick={() => {
+                                    onSelect(r.symbol);
+                                    setIsOpen(false);
+                                    setQuery('');
+                                    setResults([]);
+                                }}
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span className="search-symbol">{r.symbol}</span>
+                                        {r.isMakmur && (
+                                            <span style={{
+                                                fontSize: '0.65rem',
+                                                padding: '2px 6px',
+                                                background: 'var(--accent-indigo)',
+                                                color: 'white',
+                                                borderRadius: '4px',
+                                                fontWeight: 'bold',
+                                                letterSpacing: '0.05em'
+                                            }}>MAKMUR.ID</span>
+                                        )}
+                                        {r.isTradingView && (
+                                            <span style={{
+                                                fontSize: '0.65rem',
+                                                padding: '2px 6px',
+                                                background: '#2962FF', // TradingView brand color
+                                                color: 'white',
+                                                borderRadius: '4px',
+                                                fontWeight: 'bold',
+                                                letterSpacing: '0.05em'
+                                            }}>TRADINGVIEW</span>
+                                        )}
+                                    </div>
+                                    <span className="search-name">{r.name}</span>
+                                </div>
+                                <span className="search-type">{r.type || 'UNKNOWN'}</span>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="search-item" style={{ color: 'var(--text-muted)', pointerEvents: 'none', justifyContent: 'center' }}>
+                            No results found.
+                        </div>
+                    )}
                 </div>
             )}
         </div>

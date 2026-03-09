@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const YahooFinance = require('yahoo-finance2').default; // v3 class
+const TradingView = require('@mathieuc/tradingview');
 let yahooFinance;
 try {
     yahooFinance = new YahooFinance();
@@ -17,6 +18,9 @@ const safeVal = (val) => {
     if (val === undefined || val === null || Number.isNaN(val)) return null;
     return val;
 };
+
+// ── TRADINGVIEW INTEGRATION ────────────────────────────────────────────
+const isTradingViewId = (ticker) => ticker && ticker.includes(':');
 
 // ── MAKMUR.ID INTEGRATION ──────────────────────────────────────────────
 const isMakmurId = (ticker) => ticker && ticker.length === 24 && /^[0-9a-f]{24}$/i.test(ticker);
@@ -106,7 +110,22 @@ app.get('/api/search', async (req, res) => {
             makmurMatches = makmurAll.filter(p => p.name.toLowerCase().includes(qLower)).slice(0, 5);
         } catch (e) { }
 
-        res.json([...quotes, ...makmurMatches]);
+        let tvMatches = [];
+        try {
+            const tvResults = await TradingView.searchMarketV3(query);
+            // Deduplicate and prioritize crypto/commodities if possible
+            tvMatches = tvResults.slice(0, 4).map(tv => ({
+                symbol: `${tv.exchange}:${tv.symbol}`, // e.g. OANDA:XAUUSD
+                name: tv.description,
+                type: tv.type || 'COMMODITY',
+                exchange: tv.exchange,
+                isTradingView: true
+            }));
+        } catch (e) {
+            console.error('TradingView search error:', e.message);
+        }
+
+        res.json([...quotes, ...makmurMatches, ...tvMatches]);
     } catch (err) {
         console.error('Search error:', err);
         res.status(500).json({ error: err.message });
@@ -119,6 +138,66 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
         const { ticker } = req.params;
         const period = req.query.period || '10y';
         const interval = req.query.interval || '1mo';
+
+        // Direct handling for TradingView APIs
+        if (isTradingViewId(ticker)) {
+            // As requested, always fetch 1M (monthly) interval data for the app
+            return new Promise((resolve, reject) => {
+                const client = new TradingView.Client();
+                const chart = new client.Session.Chart();
+
+                let completed = false;
+
+                // Set timeframe to '1M' which fetches Monthly data 
+                // range represents the number of bars before the current date to fetch
+                // 120 bars = 10 years of monthly data, 240 bars = 20 years. Give it ample room.
+                chart.setMarket(ticker, { timeframe: '1M', range: 500 });
+
+                chart.onError((...err) => {
+                    if (completed) return;
+                    completed = true;
+                    console.error('TradingView Chart error:', ...err);
+                    client.end();
+                    return resolve(res.status(500).json({ error: 'Failed to fetch TradingView data' }));
+                });
+
+                chart.onUpdate(() => {
+                    if (completed) return;
+                    if (!chart.periods.length) return;
+
+                    const data = chart.periods.map(p => {
+                        const dateObj = new Date(p.time * 1000);
+                        const year = dateObj.getFullYear();
+                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                        // Use the last day of the month or a standard day, typically backend expects YYYY-MM-DD
+                        // We will set day to '01' as it represents the month's interval data start.
+                        const isoDate = `${year}-${month}-01`;
+
+                        return {
+                            date: isoDate,
+                            open: p.open,
+                            high: p.max,
+                            low: p.min,
+                            close: p.close,
+                            adjClose: p.close, // TV doesn't track adjusted specifically
+                            volume: p.volume || 0
+                        };
+                    }).reverse(); // Reverse data to supply in chronological order (oldest to newest)
+
+                    completed = true;
+                    client.end();
+                    return resolve(res.json({ ticker: ticker.toUpperCase(), period, interval: '1mo', data, isTradingView: true }));
+                });
+
+                // Fallback timeout
+                setTimeout(() => {
+                    if (completed) return;
+                    completed = true;
+                    client.end();
+                    return resolve(res.status(504).json({ error: 'TradingView Request Timeout' }));
+                }, 10000);
+            });
+        }
 
         // Direct handling for Makmur timeseries
         if (isMakmurId(ticker)) {
@@ -214,6 +293,72 @@ app.get('/api/stock/:ticker/history', async (req, res) => {
 app.get('/api/stock/:ticker/info', async (req, res) => {
     try {
         const { ticker } = req.params;
+
+        if (isTradingViewId(ticker)) {
+            return new Promise((resolve, reject) => {
+                const client = new TradingView.Client();
+                const chart = new client.Session.Chart();
+
+                let completed = false;
+
+                chart.setMarket(ticker, { timeframe: '1D' });
+
+                chart.onError((...err) => {
+                    if (completed) return;
+                    completed = true;
+                    console.error('TradingView Chart error:', ...err);
+                    client.end();
+                    return resolve(res.status(500).json({ error: 'Failed to fetch TradingView info' }));
+                });
+
+                chart.onUpdate(() => {
+                    if (completed) return;
+
+                    if (!chart.infos) {
+                        completed = true;
+                        client.end();
+                        return resolve(res.status(404).json({ error: 'TradingView ticker not found' }));
+                    }
+
+                    const info = chart.infos;
+                    const latest = chart.periods[0] || {};
+
+                    const result = {
+                        symbol: info.pro_name || ticker,
+                        name: info.description || info.short_name || ticker,
+                        sector: info.sector || 'Commodity',
+                        industry: 'Commodity',
+                        description: info.description || null,
+                        website: null,
+                        country: null,
+                        currency: info.currency_id || 'USD',
+                        exchange: info.exchange || null,
+                        currentPrice: safeVal(latest.close),
+                        previousClose: null,
+                        open: safeVal(latest.open),
+                        dayHigh: safeVal(latest.max),
+                        dayLow: safeVal(latest.min),
+                        fiftyTwoWeekHigh: null,
+                        fiftyTwoWeekLow: null,
+                        volume: safeVal(latest.volume),
+                        avgVolume: null,
+                        marketCap: null,
+                        quoteType: 'COMMODITY',
+                        isTradingView: true
+                    };
+                    completed = true;
+                    client.end();
+                    return resolve(res.json(result));
+                });
+
+                setTimeout(() => {
+                    if (completed) return;
+                    completed = true;
+                    client.end();
+                    return resolve(res.status(504).json({ error: 'TradingView Info Timeout' }));
+                }, 10000);
+            });
+        }
 
         if (isMakmurId(ticker)) {
             const allMakmur = await getMakmurProducts();
@@ -325,8 +470,8 @@ app.get('/api/stock/:ticker/info', async (req, res) => {
 app.get('/api/stock/:ticker/dividends', async (req, res) => {
     try {
         const { ticker } = req.params;
-        if (isMakmurId(ticker)) {
-            return res.json({ ticker: ticker.toUpperCase(), dividends: [], annual: [], isMakmur: true });
+        if (isMakmurId(ticker) || isTradingViewId(ticker)) {
+            return res.json({ ticker: ticker.toUpperCase(), dividends: [], annual: [], isMakmur: isMakmurId(ticker), isTradingView: isTradingViewId(ticker) });
         }
 
         // Fetch 20 years of dividends
@@ -386,8 +531,8 @@ app.get('/api/stock/:ticker/dividends', async (req, res) => {
 app.get('/api/stock/:ticker/financials', async (req, res) => {
     try {
         const { ticker } = req.params;
-        if (isMakmurId(ticker)) {
-            return res.json({ ticker: ticker.toUpperCase(), incomeStatement: [], balanceSheet: [], cashFlow: [], isMakmur: true });
+        if (isMakmurId(ticker) || isTradingViewId(ticker)) {
+            return res.json({ ticker: ticker.toUpperCase(), incomeStatement: [], balanceSheet: [], cashFlow: [], isMakmur: isMakmurId(ticker), isTradingView: isTradingViewId(ticker) });
         }
 
         try {
@@ -430,8 +575,8 @@ app.get('/api/stock/:ticker/financials', async (req, res) => {
 app.get('/api/stock/:ticker/etf', async (req, res) => {
     try {
         const { ticker } = req.params;
-        if (isMakmurId(ticker)) {
-            return res.json({ ticker: ticker.toUpperCase(), topHoldings: [], sectorWeightings: [], isMakmur: true });
+        if (isMakmurId(ticker) || isTradingViewId(ticker)) {
+            return res.json({ ticker: ticker.toUpperCase(), topHoldings: [], sectorWeightings: [], isMakmur: isMakmurId(ticker), isTradingView: isTradingViewId(ticker) });
         }
 
         try {
