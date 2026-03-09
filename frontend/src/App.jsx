@@ -210,6 +210,7 @@ export default function App() {
     const [customRange, setCustomRange] = useState([0, 100]);
     const [showStickyBar, setShowStickyBar] = useState(false);
     const [showStandardMetrics, setShowStandardMetrics] = useState(false);
+    const [showKeyStatistics, setShowKeyStatistics] = useState(false);
     const headerRef = useRef(null);
 
     const availableTimeframes = useMemo(() => {
@@ -616,28 +617,37 @@ export default function App() {
                 {/* Key Stats */}
                 {stockInfo && (
                     <div className="card animate-fade-in stagger-1">
-                        <div className="card-header">
+                        <div
+                            className="card-header"
+                            style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                            onClick={() => setShowKeyStatistics(!showKeyStatistics)}
+                        >
                             <div className="card-title">
                                 <Layers size={18} style={{ color: 'var(--accent-blue)' }} />
                                 Key Statistics
                             </div>
-                        </div>
-                        <div className="card-body">
-                            <div className="info-grid">
-                                <InfoItem label="Market Cap" value={formatLargeNumber(stockInfo.marketCap, stockInfo.currency)} tooltip="Total market value of all outstanding shares. Calculated as share price × total shares outstanding." />
-                                <InfoItem label="P/E (Trailing)" value={stockInfo.trailingPE?.toFixed(2)} tooltip="Trailing Price-to-Earnings ratio. Current stock price divided by the earnings per share (EPS) over the past 12 months. A higher P/E implies higher growth expectations." />
-                                <InfoItem label="P/E (Forward)" value={stockInfo.forwardPE?.toFixed(2)} tooltip="Forward Price-to-Earnings ratio. Current stock price divided by estimated future EPS. Useful for comparing against trailing P/E to gauge expected growth." />
-                                <InfoItem label="EPS (TTM)" value={stockInfo.trailingEps ? formatCurrency(stockInfo.trailingEps, stockInfo.currency) : null} tooltip="Earnings Per Share (Trailing Twelve Months). Net income divided by total shares outstanding over the last 12 months. Indicates profitability on a per-share basis." />
-                                <InfoItem label="52W High" value={formatCurrency(stockInfo.fiftyTwoWeekHigh, stockInfo.currency)} tooltip="The highest price the stock has traded at in the past 52 weeks (1 year). Helps gauge how close the current price is to its recent peak." />
-                                <InfoItem label="52W Low" value={formatCurrency(stockInfo.fiftyTwoWeekLow, stockInfo.currency)} tooltip="The lowest price the stock has traded at in the past 52 weeks (1 year). Helps assess downside risk relative to its recent trough." />
-                                <InfoItem label="Dividend Yield" value={stockInfo.dividendYield ? `${stockInfo.dividendYield.toFixed(2)}%` : null} tooltip="Annual dividend payment as a percentage of the current stock price. A 2% yield means you earn $2 in dividends per year for every $100 invested." />
-                                <InfoItem label="Beta" value={stockInfo.beta?.toFixed(2)} tooltip="Measures the stock's volatility relative to the overall market. Beta > 1 means more volatile than the market; Beta < 1 means less volatile. A beta of 1 moves in line with the market." />
-                                <InfoItem label="Volume" value={formatNumber(stockInfo.volume)} tooltip="Number of shares traded during the most recent trading session. High volume indicates strong interest and better liquidity." />
-                                <InfoItem label="Avg Volume" value={formatNumber(stockInfo.avgVolume)} tooltip="Average number of shares traded per day, typically over the past 3 months. Useful for comparing current volume to normal activity levels." />
-                                <InfoItem label="50D Avg" value={formatCurrency(stockInfo.fiftyDayAverage, stockInfo.currency)} tooltip="50-Day Moving Average. The mean closing price over the last 50 trading days. A common short-term trend indicator — price above it suggests an uptrend." />
-                                <InfoItem label="200D Avg" value={formatCurrency(stockInfo.twoHundredDayAverage, stockInfo.currency)} tooltip="200-Day Moving Average. The mean closing price over the last 200 trading days. A key long-term trend indicator used by institutional investors." />
+                            <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}>
+                                {showKeyStatistics ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                             </div>
                         </div>
+                        {showKeyStatistics && (
+                            <div className="card-body">
+                                <div className="info-grid">
+                                    <InfoItem label="Market Cap" value={formatLargeNumber(stockInfo.marketCap, stockInfo.currency)} tooltip="Total market value of all outstanding shares. Calculated as share price × total shares outstanding." />
+                                    <InfoItem label="P/E (Trailing)" value={stockInfo.trailingPE?.toFixed(2)} tooltip="Trailing Price-to-Earnings ratio. Current stock price divided by the earnings per share (EPS) over the past 12 months. A higher P/E implies higher growth expectations." />
+                                    <InfoItem label="P/E (Forward)" value={stockInfo.forwardPE?.toFixed(2)} tooltip="Forward Price-to-Earnings ratio. Current stock price divided by estimated future EPS. Useful for comparing against trailing P/E to gauge expected growth." />
+                                    <InfoItem label="EPS (TTM)" value={stockInfo.trailingEps ? formatCurrency(stockInfo.trailingEps, stockInfo.currency) : null} tooltip="Earnings Per Share (Trailing Twelve Months). Net income divided by total shares outstanding over the last 12 months. Indicates profitability on a per-share basis." />
+                                    <InfoItem label="52W High" value={formatCurrency(stockInfo.fiftyTwoWeekHigh, stockInfo.currency)} tooltip="The highest price the stock has traded at in the past 52 weeks (1 year). Helps gauge how close the current price is to its recent peak." />
+                                    <InfoItem label="52W Low" value={formatCurrency(stockInfo.fiftyTwoWeekLow, stockInfo.currency)} tooltip="The lowest price the stock has traded at in the past 52 weeks (1 year). Helps assess downside risk relative to its recent trough." />
+                                    <InfoItem label="Dividend Yield" value={stockInfo.dividendYield ? `${stockInfo.dividendYield.toFixed(2)}%` : null} tooltip="Annual dividend payment as a percentage of the current stock price. A 2% yield means you earn $2 in dividends per year for every $100 invested." />
+                                    <InfoItem label="Beta" value={stockInfo.beta?.toFixed(2)} tooltip="Measures the stock's volatility relative to the overall market. Beta > 1 means more volatile than the market; Beta < 1 means less volatile. A beta of 1 moves in line with the market." />
+                                    <InfoItem label="Volume" value={formatNumber(stockInfo.volume)} tooltip="Number of shares traded during the most recent trading session. High volume indicates strong interest and better liquidity." />
+                                    <InfoItem label="Avg Volume" value={formatNumber(stockInfo.avgVolume)} tooltip="Average number of shares traded per day, typically over the past 3 months. Useful for comparing current volume to normal activity levels." />
+                                    <InfoItem label="50D Avg" value={formatCurrency(stockInfo.fiftyDayAverage, stockInfo.currency)} tooltip="50-Day Moving Average. The mean closing price over the last 50 trading days. A common short-term trend indicator — price above it suggests an uptrend." />
+                                    <InfoItem label="200D Avg" value={formatCurrency(stockInfo.twoHundredDayAverage, stockInfo.currency)} tooltip="200-Day Moving Average. The mean closing price over the last 200 trading days. A key long-term trend indicator used by institutional investors." />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
