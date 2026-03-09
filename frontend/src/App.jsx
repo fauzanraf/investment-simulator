@@ -1231,10 +1231,10 @@ function ChartBrush({ data, customRange, setCustomRange }) {
                     Duration: <span style={{ color: 'var(--accent-blue)' }}>{durationText || '0 Months'}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    {[1, 3, 5, 10].map((y) => (
+                    {[1, 3, 5, 10, 20, 'Max'].map((y) => (
                         <button
                             key={y}
-                            onClick={() => handleShortcut(y)}
+                            onClick={() => y === 'Max' ? handleShortcut(120) : handleShortcut(y)}
                             style={{
                                 padding: '2px 8px',
                                 fontSize: '0.75rem',
@@ -1247,7 +1247,7 @@ function ChartBrush({ data, customRange, setCustomRange }) {
                             onMouseOver={e => { e.currentTarget.style.color = 'var(--accent-blue)'; e.currentTarget.style.borderColor = 'var(--accent-blue)'; }}
                             onMouseOut={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-light)'; }}
                         >
-                            {y}Y
+                            {y === 'Max' ? 'Max' : `${y}Y`}
                         </button>
                     ))}
                 </div>
