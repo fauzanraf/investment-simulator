@@ -212,6 +212,9 @@ export default function App() {
     // DCA Configuration State
     const [dcaInitialAmount, setDcaInitialAmount] = useState(1000);
     const [dcaMonthlyContribution, setDcaMonthlyContribution] = useState(100);
+    const [showKeyStatistics, setShowKeyStatistics] = useState(false);
+    const [showStandardMetrics, setShowStandardMetrics] = useState(false);
+    const headerRef = useRef(null);
 
     // Show sticky bar when the header scrolls out of view
     useEffect(() => {
@@ -290,7 +293,6 @@ export default function App() {
 
             const startPct = (foundIdx / (data.length - 1)) * 100;
             setCustomRange([startPct, 100]);
-            setTimeframe('Custom'); // Ensure timeframe forces to custom on reload
         }
     }, [historyData]);
 
@@ -409,7 +411,7 @@ export default function App() {
                 custom: customDcaTrailing
             }
         };
-    }, [historyData, timeframe, customRange, dcaInitialAmount, dcaMonthlyContribution]);
+    }, [historyData, customRange, dcaInitialAmount, dcaMonthlyContribution]);
 
     // Helper to get custom duration label
     const { full: customDurationLabel, short: customDurationLabelShort } = useMemo(() => {
@@ -433,7 +435,7 @@ export default function App() {
             short = `${totalMonths}M`;
         }
         return { full, short };
-    }, [historyData, timeframe, customRange]);
+    }, [historyData, customRange]);
 
     if (loading) {
         return (
