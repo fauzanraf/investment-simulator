@@ -967,15 +967,16 @@ function PriceChart({ data, hoveredPoint, setHoveredPoint, currency = 'USD' }) {
 
     const W = 1000;
     const H = 320;
-    const PAD = 12;
+    const PAD_X = 60;
+    const PAD_Y = 40;
 
     const closes = data.map((d) => d.close).filter(Boolean);
     const minVal = Math.min(...closes);
     const maxVal = Math.max(...closes);
     const range = maxVal - minVal || 1;
 
-    const getX = (i) => PAD + (i / (data.length - 1)) * (W - PAD * 2);
-    const getY = (v) => H - PAD - ((v - minVal) / range) * (H - PAD * 2);
+    const getX = (i) => PAD_X + (i / (data.length - 1)) * (W - PAD_X * 2);
+    const getY = (v) => H - PAD_Y - ((v - minVal) / range) * (H - PAD_Y * 2);
 
     const pathPoints = data
         .map((d, i) => (d.close != null ? `${getX(i)},${getY(d.close)}` : null))
@@ -1003,8 +1004,8 @@ function PriceChart({ data, hoveredPoint, setHoveredPoint, currency = 'USD' }) {
 
                 {/* Grid lines */}
                 {[0, 1, 2, 3, 4].map((i) => {
-                    const y = PAD + (i / 4) * (H - PAD * 2);
-                    return <line key={i} x1={PAD} y1={y} x2={W - PAD} y2={y} stroke="#f1f5f9" strokeWidth="1" />;
+                    const y = PAD_Y + (i / 4) * (H - PAD_Y * 2);
+                    return <line key={i} x1={PAD_X} y1={y} x2={W - PAD_X} y2={y} stroke="#f1f5f9" strokeWidth="1" />;
                 })}
 
                 {/* Area fill */}
@@ -1042,7 +1043,7 @@ function PriceChart({ data, hoveredPoint, setHoveredPoint, currency = 'USD' }) {
                 {/* Hover indicator */}
                 {hoveredPoint && (
                     <g>
-                        <line x1={hoveredPoint.x} y1={PAD} x2={hoveredPoint.x} y2={H - PAD} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 4" />
+                        <line x1={hoveredPoint.x} y1={PAD_Y} x2={hoveredPoint.x} y2={H - PAD_Y} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 4" />
                         <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="5" fill="white" stroke={strokeColor} strokeWidth="2.5" />
                     </g>
                 )}
@@ -1052,20 +1053,20 @@ function PriceChart({ data, hoveredPoint, setHoveredPoint, currency = 'USD' }) {
                     <g style={{ pointerEvents: 'none' }}>
                         {/* Start Label */}
                         <g transform={`translate(${getX(0)}, ${getY(firstClose)})`}>
-                            <rect x="-45" y="-22" width="40" height="18" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
-                            <text x="-25" y="-9" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-muted)">
+                            <rect x="8" y="-11" width="54" height="22" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                            <text x="35" y="4" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-muted)">
                                 {formatCurrency(firstClose, currency)}
                             </text>
-                            <circle r="3" fill="var(--bg-primary)" stroke={strokeColor} strokeWidth="1.5" />
+                            <circle r="4" fill="var(--bg-primary)" stroke={strokeColor} strokeWidth="1.5" />
                         </g>
 
                         {/* End Label */}
                         <g transform={`translate(${getX(data.length - 1)}, ${getY(lastClose)})`}>
-                            <rect x="5" y="-22" width="40" height="18" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
-                            <text x="25" y="-9" textAnchor="middle" fontSize="10" fontWeight="700" fill={strokeColor}>
+                            <rect x="-62" y="-11" width="54" height="22" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                            <text x="-35" y="4" textAnchor="middle" fontSize="10" fontWeight="700" fill={strokeColor}>
                                 {formatCurrency(lastClose, currency)}
                             </text>
-                            <circle r="3" fill="var(--bg-primary)" stroke={strokeColor} strokeWidth="1.5" />
+                            <circle r="4" fill="var(--bg-primary)" stroke={strokeColor} strokeWidth="1.5" />
                         </g>
                     </g>
                 )}
@@ -2124,10 +2125,10 @@ function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAm
     // --- Chart SVG Config ---
     const W = 900;
     const H = 260;
-    const PAD_LEFT = 60;
-    const PAD_RIGHT = 30;
-    const PAD_TOP = 20;
-    const PAD_BOTTOM = 20;
+    const PAD_LEFT = 70;
+    const PAD_RIGHT = 70;
+    const PAD_TOP = 30;
+    const PAD_BOTTOM = 30;
     const chartW = W - PAD_LEFT - PAD_RIGHT;
     const chartH = H - PAD_TOP - PAD_BOTTOM;
 
@@ -2266,29 +2267,29 @@ function DCASimulator({ chartData, currency = 'USD', initialAmount, setInitialAm
                             <g style={{ pointerEvents: 'none' }}>
                                 {/* Start Point (All start at the same invested amount) */}
                                 <g transform={`translate(${getX(0)}, ${getY(chartPoints[0].dcaValue)})`}>
-                                    <rect x="-65" y="-12" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
-                                    <text x="-35" y="4" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-muted)">
+                                    <rect x="10" y="-12" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                                    <text x="40" y="4" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-muted)">
                                         {formatLargeNumber(chartPoints[0].dcaValue, currency)}
                                     </text>
-                                    <circle r="3" fill="white" stroke="var(--accent-blue)" strokeWidth="1.5" />
+                                    <circle r="4" fill="white" stroke="var(--accent-blue)" strokeWidth="1.5" />
                                 </g>
 
                                 {/* End Point - DCA */}
                                 <g transform={`translate(${getX(chartPoints.length - 1)}, ${getY(dcaResult.portfolioValue)})`}>
-                                    <rect x="5" y="-28" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
-                                    <text x="35" y="-12" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent-blue)">
+                                    <rect x="-65" y="-28" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                                    <text x="-35" y="-12" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent-blue)">
                                         {formatLargeNumber(dcaResult.portfolioValue, currency)}
                                     </text>
-                                    <circle r="4" fill="white" stroke="var(--accent-blue)" strokeWidth="2" />
+                                    <circle r="5" fill="white" stroke="var(--accent-blue)" strokeWidth="2" />
                                 </g>
 
                                 {/* End Point - Lumpsum */}
                                 <g transform={`translate(${getX(chartPoints.length - 1)}, ${getY(dcaResult.lumpsumValue)})`}>
-                                    <rect x="5" y="4" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
-                                    <text x="35" y="20" textAnchor="middle" fontSize="11" fontWeight="700" fill="#64748b">
+                                    <rect x="-65" y="4" width="60" height="24" rx="4" fill="var(--bg-primary)" stroke="#e2e8f0" opacity="0.9" />
+                                    <text x="-35" y="20" textAnchor="middle" fontSize="11" fontWeight="700" fill="#64748b">
                                         {formatLargeNumber(dcaResult.lumpsumValue, currency)}
                                     </text>
-                                    <circle r="4" fill="white" stroke="#cbd5e1" strokeWidth="2" />
+                                    <circle r="5" fill="white" stroke="#cbd5e1" strokeWidth="2" />
                                 </g>
                             </g>
                         )}
