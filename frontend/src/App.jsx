@@ -215,7 +215,7 @@ export default function App() {
 
     const availableTimeframes = useMemo(() => {
         if (stockInfo?.isMakmur) return ['1Y', '3Y', '5Y', 'Custom'];
-        return ['1Y', '3Y', '5Y', '10Y', '20Y', 'Custom'];
+        return ['1Y', '3Y', '5Y', '10Y', '20Y', 'Max', 'Custom'];
     }, [stockInfo]);
 
     // Force timeframe to valid state when changing ticker
